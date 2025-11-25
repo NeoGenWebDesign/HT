@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Network & Systems Simulations — Landing</title>
+  <style>
+    :root{--bg:#0f1720;--card:#0b1220;--accent:#00bcd4;--muted:#9aa4b2;--text:#e6eef6}
+    body {
+            font-family: 'Consolas', 'Courier New', monospace;
+            background: linear-gradient(180deg, #353636 50%, #032a36 75%);
+            min-height: 100vh;
+        }
+    .wrap{max-width:1100px;margin:0 auto; color: #dd6a0c;}
+    header{display:flex;align-items:center;gap:16px;margin-bottom:18px}
+    h1{font-size:30px;margin:0; padding-top: 20px}
+    p.lead{margin:4px 0 0;color: #ffffff;font-size:13px}
+    .note{margin:10px 0 18px;color: #ffffff;font-size:13px}
+    .search{display:flex;gap:8px;margin-bottom:18px}
+    .search input{flex:1;padding:10px 12px;border-radius:8px;border:1px solid rgba(202, 185, 28, 0.527);background:rgba(255,255,255,0.02);color:var(--text)}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+    .card{background:var(--card);padding:12px;border-radius:10px;text-decoration:none;color:var(--text);display:block;border:1px solid rgb(202, 185, 28);transition:transform .12s ease,box-shadow .12s ease; text-align: center; width: 225px;}
+    .card:hover{transform:translateY(-6px);box-shadow:0 10px 30px rgba(2,6,23,0.6)}
+    .card h3{margin:6px 0 6px;font-size:15px}
+    .card .file{color:#0b1220;font-size:11px}
+    .card img.icon{width:64px;height:64px;border-radius:10px;display:block;margin:8px auto}
+    footer{margin-top:20px;color:var(--muted);font-size:13px}
+    @media (max-width:520px){body{padding:14px}.card h3{font-size:14px}}
+
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>Systems & Network Simulations</h1>
+        <p class="lead">Click a tile to open the simulation.</p>
+      </div>
+    </header>
+
+    <div class="note">Quick filter: start typing a name (e.g., "DNS", "ARP", "topology", "VPN").</div>
+
+    <div class="search">
+      <input id="filter" placeholder="Search simulations (by filename or keyword)…" aria-label="Search simulations">
+    </div>
+
+    <main>
+      <div id="grid" class="grid" aria-live="polite">
+        <!-- Cards inserted by script -->
+      </div>
+    </main>
+
+    <footer></footer>
+  </div>
+
+  <script>
+    // List of files and friendly display names
+    const sims = [
+      ['arpsim.html','ARP Simulation'],
+      ['binarydeciandhexasim.html','Binary — Dec/Hex Converter Simulation'],
+      ['binarytodeciandbacksim.html','Binary ↔ Decimal Converter Simulation'],
+      ['bootandpostsim.html','Boot & POST Simulation'],
+      ['broadcaststormssim.html','Broadcast Storms Simulation'],
+      ['bustopologysim.html','Bus Topology Simulation'],
+      ['csconnectionmodelsim.html','Client-Server Connection Models Simulation'],
+      ['dhcpsim.html','DHCP Simulation Simulation'],
+      ['dnsquerysim.html','DNS Query Simulation'],
+      ['dnsrecordsim.html','DNS Record Simulation'],
+      ['dnsspammansim.html','DNS Spam/Phishing Simulation'],
+      ['dynamicroutingprotocolsim.html','Dynamic Routing Protocols Simulation'],
+      ['eigrpsim.html','EIGRP Simulation'],
+      ['ethernetframessim.html','Ethernet Frames Simulation'],
+      ['filecompressionsim.html','File Compression Simulation'],
+      ['firewallacllistsim.html','Firewall ACL & Lists Simulation'],
+      ['httpprotocolsim.html','HTTP Protocol Simulation'],
+      ['interiorexteriorgatewayprotocolsim.html','Interior/Exterior Gateway Protocols Simulation'],
+      ['ipifconfigsim.html','IP & ifconfig Simulation'],
+      ['ipv4structuresim.html','IPv4 Structure Simulation'],
+      ['laserprintstagessim2.html','Laser Printer Stages Simulation'],
+      ['loadbalancesim.html','Load Balancing Simulation'],
+      ['macaddresscollisionsim.html','MAC Address Collisions Simulation'],
+      ['meshtoplogysim.html','Mesh Topology Simulation'],
+      ['natpatsim.html','NAT & PAT Simulation'],
+      ['netstatsim.html','Network Stats Simulation'],
+      ['networkspeedsim.html','Network Speeds Simulation'],
+      ['ntpsim.html','NTP Simulation Simulation'],
+      ['osimodelsim.html','OSI Model Simulation'],
+      ['ospfsim.html','OSPF Simulation'],
+      ['p2pconnectionmodelsim.html','P2P Connection Models Simulation'],
+      ['passwordhashsim.html','Password Hashing Simulation'],
+      ['pingsim.html','Ping Simulation'],
+      ['proxysim.html','Proxy Simulation'],
+      ['publictoprivatedatasim.html','Public vs Private Data Simulation'],
+      ['ringtopologysim.html','Ring Topology Simulation'],
+      ['ripsim.html','RIP Simulation'],
+      ['screenedsubnetssim.html','Screened Subnets Simulation'],
+      ['sohosetupsim.html','SOHO Setup Simulation'],
+      ['spanningtreesim.html','Spanning Tree Protocol Simulation'],
+      ['sslandtlssim.html','SSL / TLS Simulation'],
+      ['startoplogysim.html','Star Topology Simulation'],
+      ['switchingloopssim.html','Switching Loops Simulation'],
+      ['taggedanduntaggedportssim.html','Tagged & Untagged Ports Simulation'],
+      ['threetieredhierarchysim.html','Three-tier Hierarchy Simulation'],
+      ['threewayhandshakesim.html','Three-way Handshake Simulation'],
+      ['traceroutesim.html','Traceroute Simulation'],
+      ['vlansim.html','VLAN Simulation'],
+      ['vlantrunkingsim.html','VLAN Trunking Simulation'],
+      ['vpnsim.html','VPN Simulation'],
+      ['wireless24ghzchannelsim.html','Wireless 2.4GHz Channels Simulation'],
+      ['wireless5ghzchannelssim.html','Wireless 5GHz Channels Simulation']
+    ];
+
+    const grid = document.getElementById('grid');
+    const filterInput = document.getElementById('filter');
+
+    function render(list){
+      grid.innerHTML = '';
+      if(list.length === 0){ grid.innerHTML = '<div style="color:var(--muted);padding:12px">No matches</div>'; return }
+      list.forEach(([file, title]) => {
+        const a = document.createElement('a');
+        a.className = 'card';
+        a.href = file;
+        const iconPath = 'icons/' + file.replace('.html', '.svg');
+        a.innerHTML = `<img class="icon" src="${iconPath}" alt="${title} thumbnail" onerror="this.style.display='none'"/>` +
+                      `<h3>${title}</h3><div class="file">${file}</div>`;
+        grid.appendChild(a);
+      });
+    }
+
+    // initial render
+    render(sims);
+
+    filterInput.addEventListener('input', ()=>{
+      const q = filterInput.value.trim().toLowerCase();
+      if(!q) { render(sims); return }
+      const filtered = sims.filter(([file,title]) => (file+ ' ' + title).toLowerCase().includes(q));
+      render(filtered);
+    });
+  </script>
+</body>
+</html>
