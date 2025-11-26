@@ -1,0 +1,13 @@
+[build]
+  # Publish the site from the repository root where index.html lives
+  publish = "."
+
+  # Directory where Netlify Functions are stored
+  functions = "netlify/functions"
+
+[dev]
+  # When running `netlify dev` this tells Netlify where functions live locally
+  functions = "netlify/functions"
+
+# Note: Do NOT commit secrets in this file. Add environment variables and
+# API keys using the Netlify UI (Site settings → Build & deploy → Environment).
