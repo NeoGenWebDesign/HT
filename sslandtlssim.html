@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SSL/TLS Handshake Simulator</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Consolas', 'Courier New', monospace;
+            background: linear-gradient(180deg, #353636 50%, #032a36 75%);
+            min-height: 100vh;
+        }
+        a {
+            display: block;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            text-align: center;
+        }
+        .container-card {
+            background-color: white;
+            border-radius: 2rem;
+            box-shadow: 0 15px 30px -5px rgba(0, 0, 0, 0.1), 0 5px 15px -5px rgba(0, 0, 0, 0.04);
+            padding: 4rem;
+        }
+        .vis-area {
+            position: relative;
+            height: 400px;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 2rem;
+            padding-top: 30px;
+        }
+
+        /* Device Styling (Client & Server) */
+        .device {
+            width: 180px;
+            height: 180px;
+            background-color: #3b82f6; /* Blue */
+            border-radius: 0.75rem;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            box-shadow: 0 5px 10px rgba(0, 0, 0, 0.2);
+            z-index: 10;
+            position: relative;
+            padding: 1rem;
+            text-align: center;
+        }
+        .device-label {
+            position: absolute;
+            top: -2.5rem;
+            font-size: 1.2rem;
+            color: #1f2937;
+            font-weight: 700;
+        }
+        .server { background-color: #10b981; /* Green */ }
+        .key { font-size: 0.8rem; margin-top: 0.5rem; }
+
+        /* Key/Message Frame Animation */
+        .handshake-message {
+            position: absolute;
+            width: 80px;
+            padding: 5px 0;
+            border-radius: 0.5rem;
+            font-size: 0.7rem;
+            font-weight: bold;
+            color: white;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+            z-index: 20;
+            opacity: 0;
+            transition: opacity 0.1s;
+            text-align: center;
+        }
+        .message-client { background-color: #ef4444; /* Red: Client -> Server */ }
+        .message-server { background-color: #f97316; /* Orange: Server -> Client */ }
+
+        /* Network Link */
+        .network-link {
+            position: absolute;
+            left: 190px;
+            right: 190px;
+            top: 115px;
+            height: 4px;
+            background-color: #9ca3af; /* Gray */
+            border-radius: 2px;
+            transition: background-color 0.5s;
+        }
+        .link-secure { background-color: #34d399; } /* Green for secure connection */
+
+        /* Log Styling */
+        .console-log {
+            min-height: 180px;
+            max-height: 300px;
+            background-color: #1f2937;
+            color: #e5e7eb;
+            font-family: 'Consolas', 'Courier New', monospace;
+            border-radius: 0.75rem;
+            padding: 1rem;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            font-size: 0.85rem;
+        }
+        .log-step { color: #facc15; } /* Yellow for step numbers */
+        .log-message { color: #60a5fa; } /* Blue for messages */
+        .log-security { color: #34d399; } /* Green for secure status */
+        .log-key { color: #f87171; } /* Red for key data */
+    </style>
+</head>
+<body class="p-4 md:p-10 min-h-screen">
+
+    <div class="max-w-6xl mx-auto">
+        <h1 class="text-3xl font-extrabold text-orange-500 mb-6 text-center">
+            SSL/TLS Handshake Simulation
+        </h1>
+        <p class="text-center text-white mb-8 max-w-2xl mx-auto">
+            This simulation demonstrates the core steps used by TLS to establish a secure, encrypted channel using a mix of Asymmetric (for key exchange) and Symmetric (for bulk data) encryption.
+        </p>
+        <p class="text-sm text-yellow-500 mb-8 text-center">
+            Press F5 or Reload/Refresh Browser to Reset Simulation.
+        </p>
+        <a id="link" class="text-sm hover:text-lime-500 text-yellow-200 mb-8 text-center" href="index.html">
+            Back to Simulations Index
+        </a>
+
+        <div class="container-card">
+
+            <!-- Visualization Area -->
+            <div id="vis-area" class="vis-area">
+                <!-- Client -->
+                <div class="device-container flex flex-col items-center">
+                    <div class="device-label">Client (Browser)</div>
+                    <div id="client" class="device">
+                        <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+                        Public Key: N/A
+                        <div id="client-key" class="key">Symmetric Key: **LOCKED**</div>
+                    </div>
+                </div>
+
+                <!-- Network Link -->
+                <div id="link" class="network-link absolute self-center"></div>
+
+                <!-- Server -->
+                <div class="device-container flex flex-col items-center">
+                    <div class="device-label">Server (Web Host)</div>
+                    <div id="server" class="device server">
+                        <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 002 2h10a2 2 0 002-2M5 12a2 2 0 012-2h10a2 2 0 012 2m-2 7H7a2 2 0 01-2-2v-4a2 2 0 012-2h10a2 2 0 012 2v4a2 2 0 01-2 2z"></path></svg>
+                        <div id="server-public-key">Public Key: **ABC-101**</div>
+                        <div id="server-private-key" class="key">Private Key: **XYZ-999**</div>
+                    </div>
+                </div>
+
+                <!-- Handshake Messages (Positioning handled by JS) -->
+                <div id="msg-1" class="handshake-message message-client" style="top: 0px;">1. Client Hello</div>
+                <div id="msg-2" class="handshake-message message-server" style="top: 50px;">2. Server Hello</div>
+                <div id="msg-3" class="handshake-message message-server" style="top: 100px;">3. Certificate</div>
+                <div id="msg-4" class="handshake-message message-client" style="top: 150px;">4. Key Exchange</div>
+                <div id="msg-5" class="handshake-message message-server" style="top: 200px;">5. Finished</div>
+                <div id="msg-6" class="handshake-message message-client" style="top: 250px;">6. Finished</div>
+            </div>
+
+            <!-- Controls and Explanations -->
+            <div class="flex justify-center space-x-4 mb-6">
+                <button onclick="startSimulation()" id="start-btn"
+                        class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg shadow-xl transition duration-150 text-base disabled:opacity-50">
+                    Start Handshake
+                </button>
+                <button onclick="resetSimulation()" id="reset-btn" disabled
+                        class="bg-gray-400 hover:bg-gray-500 text-white font-bold py-3 px-6 rounded-lg shadow-xl transition duration-150 text-base disabled:opacity-50">
+                    Reset
+                </button>
+            </div>
+
+            <h3 class="text-xl font-semibold text-gray-800 mb-3">TLS Handshake Protocol Log</h3>
+            <div id="sim-log" class="console-log">
+                <p class="log-status">// Click 'Start Handshake' to begin the key exchange process.</p>
+                <p class="log-status">// The goal is to agree on a shared, secret Symmetric Key for fast, secure communication.</p>
+            </div>
+
+             <div id="explanation-box" class="mt-6 p-4 bg-yellow-50 border-l-4 border-yellow-500 rounded-lg text-sm text-gray-700">
+                <h4 class="font-bold text-lg mb-1">Key Concepts Explained:</h4>
+                <ul class="list-disc list-inside space-y-1 ml-4">
+                    <li>**Asymmetric Encryption (Public/Private Key):** Used only during the handshake. Slow, but enables secure exchange of a secret key.</li>
+                    <li>**Symmetric Encryption (Shared Secret Key):** Used after the handshake. Fast, efficient, and used to encrypt all the actual data (HTML, images, etc.).</li>
+                    <li>**Certificate:** Provides the Server's Public Key and proves its identity, preventing Man-in-the-Middle attacks.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Configuration and State ---
+        let isRunning = false;
+        const ANIMATION_TIME = 800; // Time for message travel
+        const WAIT_TIME = 500; // Time to pause for logging/processing
+        const SYMMETRIC_KEY = "AES-256-SESSION-KEY-0XF34D";
+        const MESSAGES = [
+            { id: 'msg-1', text: '1. Client Hello', duration: ANIMATION_TIME, type: 'client', from: 'client', to: 'server', log: 'Client initiates handshake, proposing TLS version and cipher suites.' },
+            { id: 'msg-2', text: '2. Server Hello', duration: ANIMATION_TIME, type: 'server', from: 'server', to: 'client', log: 'Server selects the best cipher suite and sends its own random number.' },
+            { id: 'msg-3', text: '3. Certificate', duration: ANIMATION_TIME, type: 'server', from: 'server', to: 'client', log: 'Server sends its Public Key, contained within its SSL/TLS Certificate, for authentication.' },
+            { id: 'msg-4', text: '4. Key Exchange', duration: ANIMATION_TIME, type: 'client', from: 'client', to: 'server', log: `Client generates a **Pre-Master Secret** and encrypts it using the Server's Public Key. This is the secure key exchange step.` },
+            { id: 'msg-5', text: '5. Finished (Server)', duration: ANIMATION_TIME, type: 'server', from: 'server', to: 'client', log: 'Server and Client independently compute the final Symmetric Key. Server sends a verified, encrypted Finished message.' },
+            { id: 'msg-6', text: '6. Finished (Client)', duration: ANIMATION_TIME, type: 'client', from: 'client', to: 'server', log: 'Client verifies the Server\'s message, sends its own verified, encrypted Finished message.' },
+        ];
+        
+        const elements = {
+            visArea: document.getElementById('vis-area'),
+            link: document.getElementById('link'),
+            clientKeyDisplay: document.getElementById('client-key'),
+            log: document.getElementById('sim-log'),
+            startBtn: document.getElementById('start-btn'),
+            resetBtn: document.getElementById('reset-btn'),
+        };
+
+        const messageElements = MESSAGES.map(m => document.getElementById(m.id));
+
+        // --- Utility Functions ---
+
+        function log(message, type = 'log-message') {
+            elements.log.innerHTML += `<span class="${type}">${message}</span>\n`;
+            elements.log.scrollTop = elements.log.scrollHeight;
+        }
+
+        function clearLog() {
+            elements.log.innerHTML = '';
+        }
+
+        function setButtonState(running) {
+            isRunning = running;
+            elements.startBtn.disabled = running;
+            elements.resetBtn.disabled = !running;
+            elements.startBtn.textContent = running ? 'Handshake Running...' : 'Start Handshake';
+        }
+
+        // --- Animation Logic ---
+
+        function getPositions() {
+            const visRect = elements.visArea.getBoundingClientRect();
+            const clientRect = document.getElementById('client').getBoundingClientRect();
+            const serverRect = document.getElementById('server').getBoundingClientRect();
+            
+            // Positions relative to the visualization area
+            return {
+                clientX: clientRect.left + clientRect.width / 2 - visRect.left,
+                serverX: serverRect.left + serverRect.width / 2 - visRect.left
+            };
+        }
+        
+        function animateFrame(messageElement, from, to, duration, callback) {
+            const { clientX, serverX } = getPositions();
+            const startPos = from === 'client' ? clientX : serverX;
+            const endPos = to === 'client' ? clientX : serverX;
+
+            messageElement.style.left = `${startPos - 40}px`; // Center X
+            messageElement.style.opacity = '1';
+            
+            // Set up transition
+            messageElement.style.transition = `transform ${duration}ms linear, opacity 100ms`;
+
+            // Trigger reflow/repaint to ensure start position is rendered
+            void messageElement.offsetWidth;
+
+            // Animate to end position (using a full horizontal shift)
+            messageElement.style.transform = `translateX(${endPos - startPos}px)`;
+
+            setTimeout(() => {
+                messageElement.style.opacity = '0';
+                messageElement.style.transform = `translateX(0)`; // Reset for next use
+                messageElement.style.transition = 'none'; 
+                if (callback) callback();
+            }, duration);
+        }
+
+        // --- Simulation Steps ---
+
+        function runStep(index) {
+            if (index >= MESSAGES.length) {
+                // Final step: Secure connection established
+                setTimeout(() => {
+                    elements.link.classList.add('link-secure');
+                    log(`\n*** SUCCESS: Secure Symmetric Channel Established! ***`, 'log-security');
+                    log(`Client and Server now use the Symmetric Key: ${SYMMETRIC_KEY} to encrypt and decrypt all application data (HTTP).`, 'log-security');
+                    setButtonState(false);
+                }, WAIT_TIME * 2); 
+                return;
+            }
+
+            const step = MESSAGES[index];
+            const messageEl = document.getElementById(step.id);
+            
+            log(`\n[STEP ${index + 1}] ${step.log}`, 'log-step');
+
+            animateFrame(messageEl, step.from, step.to, step.duration, () => {
+                // Logic after message arrives
+                
+                if (step.id === 'msg-3') {
+                    // Authentication step
+                    log(`Server's Public Key (ABC-101) is received by the Client. Client verifies the certificate.`, 'log-key');
+                } else if (step.id === 'msg-4') {
+                    // Key Exchange step
+                    log(`Server uses its Private Key (XYZ-999) to decrypt the Pre-Master Secret from the Client.`, 'log-key');
+                } else if (step.id === 'msg-6') {
+                    // Final confirmation and key activation
+                    elements.clientKeyDisplay.innerHTML = `Symmetric Key: <span class="text-yellow-400">${SYMMETRIC_KEY}</span>`;
+                }
+
+                // Move to the next step
+                setTimeout(() => runStep(index + 1), WAIT_TIME);
+            });
+        }
+
+        function startSimulation() {
+            if (isRunning) return;
+            resetVisuals();
+            setButtonState(true);
+            clearLog();
+            log('Starting TLS 1.3 Handshake (Simulated).', 'log-status');
+            
+            // Start the sequence
+            setTimeout(() => runStep(0), WAIT_TIME);
+        }
+
+        function resetVisuals() {
+            // Reset state displays
+            elements.clientKeyDisplay.innerHTML = `Symmetric Key: **LOCKED**`;
+            elements.link.classList.remove('link-secure');
+            
+            // Reset message positions and opacity
+            const { clientX, serverX } = getPositions();
+            MESSAGES.forEach((m, index) => {
+                 const messageEl = document.getElementById(m.id);
+                 messageEl.style.opacity = '0';
+                 messageEl.style.transform = 'translateX(0)';
+                 // Initial static placement in the middle track for visualization
+                 messageEl.style.left = `${(clientX + serverX) / 2 - 40}px`; 
+            });
+        }
+        
+        function resetSimulation() {
+             // Stop the sequence if it's running (no need for complex interruption logic in this simple case)
+            setButtonState(false);
+            resetVisuals();
+            clearLog();
+            log('Simulation reset. Ready to run.', 'log-status');
+            log('// Click "Start Handshake" to begin the key exchange process.', 'log-status');
+        }
+
+        // Initialize display positions on load
+        window.onload = resetVisuals;
+        window.onresize = resetVisuals; // Re-run initial positioning on resize
+
+    </script>
+</body>
+</html>

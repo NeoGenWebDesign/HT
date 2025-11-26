@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Three-Tier Network Hierarchy Simulator</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Consolas', 'Courier New', monospace;
+            background: linear-gradient(180deg, #353636 50%, #032a36 75%);
+            min-height: 100vh;
+        }
+        a {
+            display: block;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            text-align: center;
+        }
+        .container-card {
+            background-color: white;
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+            padding: 2rem;
+        }
+        .vis-area {
+            position: relative;
+            height: 500px;
+            width: 100%;
+            border-radius: 0.75rem;
+            background-color: #f0f4f8; /* Light blue-gray background */
+            margin-bottom: 1.5rem;
+            overflow: hidden;
+        }
+        .node {
+            position: absolute;
+            width: 70px;
+            height: 70px;
+            color: white;
+            border-radius: 0.5rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: bold;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+            transition: transform 0.3s;
+            z-index: 10;
+            cursor: pointer;
+            padding: 5px;
+            text-align: center;
+        }
+        .node-label {
+            font-size: 0.65rem;
+            margin-top: 2px;
+            font-weight: normal;
+        }
+        .node:hover {
+            transform: scale(1.05);
+        }
+
+        /* Tier Specific Styling */
+        .core-node { background-color: #eab308; /* Yellow/Amber */ }
+        .distribution-node { background-color: #2563eb; /* Blue/Indigo */ }
+        .access-node { background-color: #10b981; /* Green/Emerald */ }
+
+        .packet {
+            position: absolute;
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            background-color: #ef4444; /* Red for data */
+            z-index: 20;
+            transition: all 0.5s ease-out; 
+            box-shadow: 0 0 8px #ef4444;
+        }
+        .link {
+            position: absolute;
+            height: 2px;
+            background-color: #9ca3af; 
+            transform-origin: 0 0;
+            z-index: 5;
+            transition: background-color 0.5s;
+        }
+        .link.active {
+            background-color: #ef4444 !important; /* Red when active */
+            box-shadow: 0 0 4px #ef4444;
+        }
+        .console-log {
+            min-height: 150px;
+            background-color: #1f2937;
+            color: #d1d5db;
+            font-family: 'Consolas', 'Courier New', monospace;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            font-size: 0.85rem;
+        }
+        .log-core { color: #f59e0b; } 
+        .log-dist { color: #60a5fa; } 
+        .log-access { color: #34d399; }
+        .log-send { color: #ef4444; font-weight: bold;}
+    </style>
+</head>
+<body class="p-4 md:p-10 min-h-screen">
+
+    <div class="max-w-5xl mx-auto">
+        <h1 class="text-4xl font-extrabold text-orange-500 mb-2 text-center">
+            Three-Tier Network Hierarchy Simulator
+        </h1>
+        <p class="text-lg text-white mb-6 text-center">
+            Simulating data flow through Access, Distribution, and Core layers.
+        </p>
+        <p class="text-sm text-yellow-500 mb-8 text-center">
+            Press F5 or Reload/Refresh Browser to Reset Simulation.
+        </p>
+        <a id="link" class="text-sm hover:text-lime-500 text-yellow-200 mb-8 text-center" href="index.html">
+            Back to Simulations Index
+        </a>
+
+        <div class="container-card">
+            <p class="text-gray-700 mb-4 text-sm">
+                The three-tier model separates the network into functional layers, ensuring reliability and simplifying management:
+                <ul class="list-disc list-inside ml-4 mt-2 space-y-1">
+                    <li class="font-bold text-yellow-600">Core Layer (C1):</li>
+                    <span class="font-normal text-gray-600 ml-3">The high-speed backbone. Focuses only on fast, reliable, large-volume packet switching/forwarding. No policy or complex routing.</span>
+                    <li class="font-bold text-blue-600">Distribution Layer (D1, D2):</li>
+                    <span class="font-normal text-gray-600 ml-3">The control plane. Aggregates data from Access, implements routing, policy (ACLs), QoS, and defines network boundaries.</span>
+                    <li class="font-bold text-green-600">Access Layer (A1-A4):</span>
+                    <span class="font-normal text-gray-600 ml-3">Connects end-user devices (PCs, phones). Handles switching, VLAN assignment, and port security.</span>
+                </ul>
+            </p>
+            
+            <div id="tier-vis" class="vis-area">
+                <!-- Visualization elements will be injected here -->
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 items-end">
+                <div class="bg-gray-100 p-3 rounded-lg flex flex-col justify-center">
+                    <label class="text-sm font-medium text-gray-700 mb-1">Source Node:</label>
+                    <select id="source-select" class="p-2 border border-gray-300 rounded-md"></select>
+                </div>
+                <div class="bg-gray-100 p-3 rounded-lg flex flex-col justify-center">
+                    <label class="text-sm font-medium text-gray-700 mb-1">Target Node:</label>
+                    <select id="target-select" class="p-2 border border-gray-300 rounded-md"></select>
+                </div>
+                
+                <button onclick="simulateTransmission()" id="send-btn"
+                        class="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition duration-150 text-center text-sm disabled:opacity-50 col-span-2">
+                    Start Data Transmission & Route Analysis
+                </button>
+            </div>
+
+            <h3 class="text-xl font-semibold text-gray-800 mb-3">Network Console Log</h3>
+            <div id="tier-log" class="console-log">
+                <p class="log-dist">Network Initialized. Try the following routes:</p>
+                <p class="log-dist">Example 1 (Intra-Distribution): A1 to A2 (Only touches Access & Distribution layers).</p>
+                <p class="log-dist">Example 2 (Inter-Distribution): A1 to A4 (Must traverse the Core layer).</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const MOVEMENT_SPEED_MS = 600;
+        let animationLocked = false;
+        
+        // Define Network Topology and Node Positions (Relative to 0-1000, will be scaled)
+        const NETWORK_MAP = {
+            // Core Layer (Y=100)
+            C1: { type: 'core', x: 500, y: 100, connects: ['D1', 'D2'] },
+            // Distribution Layer (Y=250)
+            D1: { type: 'distribution', x: 300, y: 250, connects: ['C1', 'A1', 'A2'] },
+            D2: { type: 'distribution', x: 700, y: 250, connects: ['C1', 'A3', 'A4'] },
+            // Access Layer (Y=400)
+            A1: { type: 'access', x: 100, y: 400, connects: ['D1'] },
+            A2: { type: 'access', x: 500, y: 400, connects: ['D1'] },
+            A3: { type: 'access', x: 900, y: 400, connects: ['D2'] },
+            A4: { type: 'access', x: 800, y: 400, connects: ['D2'] },
+        };
+
+        const NODE_IDS = Object.keys(NETWORK_MAP);
+        let currentPositions = {}; // Stores calculated X, Y coordinates
+
+        // --- Utility Functions ---
+
+        /** Logs a message to the console element */
+        function log(message, type = 'log-info') {
+            const consoleEl = document.getElementById('tier-log');
+            const timestamp = new Date().toLocaleTimeString('en-US', { hour12: false, second: '2-digit', minute: '2-digit' });
+            consoleEl.innerHTML += `[${timestamp}] <span class="${type}">${message}</span>\n`;
+            consoleEl.scrollTop = consoleEl.scrollHeight;
+        }
+
+        /** Pauses execution for a duration */
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+        
+        /** Gets the canonical link ID (e.g., A1-D1) */
+        function getLinkKey(id1, id2) {
+            return id1 < id2 ? `${id1}-${id2}` : `${id2}-${id1}`;
+        }
+
+        // --- Visualization Setup ---
+
+        /** Clears the visualization and draws the network based on the map */
+        function initializeVisualization() {
+            const container = document.getElementById('tier-vis');
+            container.innerHTML = '';
+            const { width, height } = container.getBoundingClientRect();
+
+            // Scaling factor: Use a max dimension (e.g., 950) to normalize positions
+            const maxRelativeX = 1000; 
+            const maxRelativeY = 450; // The max Y used in the map is 400, so we use 450 for padding
+            const scaleX = width / maxRelativeX;
+            const scaleY = height / maxRelativeY;
+
+            // 1. Draw Links
+            // We use a Set to ensure links are only drawn once (D1-C1 is the same as C1-D1)
+            const drawnLinks = new Set(); 
+            NODE_IDS.forEach(id1 => {
+                const node1 = NETWORK_MAP[id1];
+                node1.connects.forEach(id2 => {
+                    const linkKey = getLinkKey(id1, id2);
+                    if (!drawnLinks.has(linkKey)) {
+                        drawLink(id1, id2, scaleX, scaleY, container);
+                        drawnLinks.add(linkKey);
+                    }
+                });
+            });
+
+            // 2. Draw Nodes
+            NODE_IDS.forEach(id => {
+                drawNode(id, scaleX, scaleY, container);
+            });
+
+            populateSelects();
+            updateSelectedNodes();
+        }
+
+        /** Draws a connection line between two nodes */
+        function drawLink(id1, id2, scaleX, scaleY, container) {
+            const start = { x: NETWORK_MAP[id1].x * scaleX, y: NETWORK_MAP[id1].y * scaleY };
+            const end = { x: NETWORK_MAP[id2].x * scaleX, y: NETWORK_MAP[id2].y * scaleY };
+            
+            const dx = end.x - start.x;
+            const dy = end.y - start.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+            
+            const linkEl = document.createElement('div');
+            linkEl.className = 'link';
+            linkEl.id = `link-${getLinkKey(id1, id2)}`;
+            linkEl.style.width = `${distance}px`;
+            linkEl.style.left = `${start.x}px`;
+            linkEl.style.top = `${start.y}px`;
+            linkEl.style.transform = `rotate(${angle}deg)`;
+            
+            container.appendChild(linkEl);
+        }
+
+        /** Draws a single node element */
+        function drawNode(id, scaleX, scaleY, container) {
+            const data = NETWORK_MAP[id];
+            const className = `${data.type}-node`;
+            
+            // Calculate final position
+            const x = data.x * scaleX;
+            const y = data.y * scaleY;
+            currentPositions[id] = { x, y };
+
+            const node = document.createElement('div');
+            node.className = `node ${className}`;
+            node.id = `node-${id}`;
+            // Adjust position to center the 70px node element
+            node.style.left = `${x - 35}px`; 
+            node.style.top = `${y - 35}px`; 
+            node.innerHTML = `
+                <div class="text-lg">${id}</div>
+                <div class="node-label">${data.type.toUpperCase()}</div>
+            `;
+            node.onclick = () => selectNode(id);
+            container.appendChild(node);
+        }
+
+        /** Populates the source and target dropdowns (only Access nodes are selectable as endpoints) */
+        function populateSelects() {
+            const accessNodes = NODE_IDS.filter(id => NETWORK_MAP[id].type === 'access');
+            const sourceSelect = document.getElementById('source-select');
+            const targetSelect = document.getElementById('target-select');
+
+            sourceSelect.innerHTML = '';
+            targetSelect.innerHTML = '';
+
+            accessNodes.forEach(id => {
+                sourceSelect.add(new Option(`Node ${id}`, id));
+                targetSelect.add(new Option(`Node ${id}`, id));
+            });
+
+            // Set default selections
+            sourceSelect.value = 'A1';
+            targetSelect.value = 'A4';
+            
+            // Add change listeners
+            sourceSelect.onchange = updateSelectedNodes;
+            targetSelect.onchange = updateSelectedNodes;
+        }
+
+        /** Updates the visual style of the selected nodes */
+        function updateSelectedNodes() {
+            const sourceId = document.getElementById('source-select').value;
+            const targetId = document.getElementById('target-select').value;
+
+            document.querySelectorAll('.node').forEach(node => {
+                // Reset box shadows for all nodes
+                node.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.2)';
+            });
+
+            // Highlight Source Node
+            const sourceEl = document.getElementById(`node-${sourceId}`);
+            if (sourceEl) {
+                sourceEl.style.boxShadow = '0 0 15px #ef4444'; // Red for Source
+            }
+            
+            // Highlight Target Node
+            const targetEl = document.getElementById(`node-${targetId}`);
+            if (targetEl) {
+                targetEl.style.boxShadow = '0 0 15px #10b981'; // Green for Target
+            }
+        }
+        
+        /** Allows clicking a node to set it as source */
+        function selectNode(id) {
+            // Only allow Access nodes to be set as source/target
+            if (NETWORK_MAP[id].type === 'access') {
+                const sourceSelect = document.getElementById('source-select');
+                sourceSelect.value = id;
+                updateSelectedNodes();
+            }
+        }
+
+        // --- Core Routing Logic ---
+
+        /** * Determines the path based on the three-tier logic.
+         * The path is predetermined by the network structure, not Dijkstra's, 
+         * to explicitly show the three-tier flow.
+         */
+        function determinePath(sourceId, targetId) {
+            const sourceInfo = NETWORK_MAP[sourceId];
+            const targetInfo = NETWORK_MAP[targetId];
+
+            // 1. Determine Distribution Layer connection points
+            const sourceDistId = sourceInfo.connects[0]; // e.g., D1 for A1
+            const targetDistId = targetInfo.connects[0]; // e.g., D2 for A4
+
+            let path = [];
+            
+            // Start at source Access Node
+            path.push(sourceId); 
+            
+            if (sourceDistId === targetDistId) {
+                // Scenario 1: Intra-Distribution (e.g., A1 to A2)
+                path.push(sourceDistId);
+                path.push(targetId);
+                log(`ROUTE DECISION: Intra-Distribution flow detected (Source and Target are connected to the same Distribution layer: ${sourceDistId}). The Core layer is bypassed.`, 'log-dist');
+            } else {
+                // Scenario 2: Inter-Distribution (e.g., A1 to A4)
+                path.push(sourceDistId); // Up to Distribution
+                path.push('C1');         // Up to Core (Switching backbone)
+                path.push(targetDistId); // Down to Target Distribution
+                path.push(targetId);     // Down to Target Access
+                log(`ROUTE DECISION: Inter-Distribution flow detected. Data must be forwarded through the high-speed Core layer (C1) to reach the other Distribution block (${targetDistId}).`, 'log-core');
+            }
+            
+            return path;
+        }
+
+        // --- Simulation Logic ---
+
+        /** Simulates the data transmission process */
+        async function simulateTransmission() {
+            if (animationLocked) return;
+            
+            const sourceId = document.getElementById('source-select').value;
+            const targetId = document.getElementById('target-select').value;
+            
+            if (sourceId === targetId) {
+                log(`ERROR: Source and Target nodes must be different.`, 'log-send');
+                return;
+            }
+
+            // Lock the animation and disable buttons
+            animationLocked = true;
+            document.getElementById('send-btn').disabled = true;
+            document.getElementById('send-btn').textContent = 'Transmission In Progress...';
+            document.querySelectorAll('.link').forEach(link => link.classList.remove('active'));
+
+            const path = determinePath(sourceId, targetId);
+
+            log('-------------------------------------------', 'log-send');
+            log(`START: Node ${sourceId} sends data to Node ${targetId}.`, 'log-send');
+            log(`PATH: ${path.join(' -> ')}`, 'log-send');
+
+            // 1. Create packet element
+            const p = document.createElement('div');
+            p.className = 'packet';
+            const startPos = currentPositions[sourceId];
+            const offset = -7.5; // Centering adjustment for 15px packet
+            p.style.left = `${startPos.x + offset}px`;
+            p.style.top = `${startPos.y + offset}px`;
+            document.getElementById('tier-vis').appendChild(p);
+
+            // 2. Traverse the path
+            for (let i = 0; i < path.length - 1; i++) {
+                const currentId = path[i];
+                const nextId = path[i + 1];
+                
+                const startNodePos = currentPositions[currentId];
+                const endNodePos = currentPositions[nextId];
+                const currentType = NETWORK_MAP[currentId].type;
+
+                // Highlight the active link
+                const linkKey = getLinkKey(currentId, nextId);
+                const linkEl = document.getElementById(`link-${linkKey}`);
+                if (linkEl) linkEl.classList.add('active');
+
+                // Node Action Log & Pulse
+                await pulseNode(currentId, currentType);
+                let logType = `log-${currentType}`;
+                
+                if (currentId === sourceId) {
+                     log(`Access Node ${currentId}: Connects endpoint, forwards data packet to Distribution layer (${nextId}).`, logType);
+                } else if (currentType === 'distribution') {
+                    if (path.includes('C1')) {
+                        log(`Distribution Node ${currentId}: Performs routing decision. Since the target is in a different block, FORWARDS packet to the Core layer (${nextId}).`, logType);
+                    } else {
+                        log(`Distribution Node ${currentId}: Performs routing decision. Since the target (${targetId}) is local, FORWARDS packet directly to Access layer (${nextId}).`, logType);
+                    }
+                } else if (currentType === 'core') {
+                    log(`Core Node ${currentId}: Receives packet and performs high-speed switching to the required Distribution layer (${nextId}). No policy processing here.`, logType);
+                } else if (currentId === targetId) {
+                    log(`Access Node ${currentId}: Receives packet and delivers it to the end device. Transmission complete!`, logType);
+                }
+                
+                // Animate packet movement
+                await movePacket(p, startNodePos, endNodePos, MOVEMENT_SPEED_MS);
+                
+                // Remove link highlight after movement
+                if (linkEl) linkEl.classList.remove('active');
+            }
+
+            // 3. Final action at Target
+            await pulseNode(targetId, 'access', 1500); // Target is always Access
+            
+            await sleep(500);
+            
+            // 4. Cleanup and unlock
+            p.remove();
+            log(`END: Data packet successfully reached ${targetId}.`, 'log-access');
+            
+            animationLocked = false;
+            document.getElementById('send-btn').disabled = false;
+            document.getElementById('send-btn').textContent = 'Start Data Transmission & Route Analysis';
+            updateSelectedNodes(); // Reapply original box shadows
+        }
+        
+        /** Animates a node to show it's processing the packet */
+        async function pulseNode(id, type, duration = 300) {
+            const nodeEl = document.getElementById(`node-${id}`);
+            if (!nodeEl) return;
+
+            let color;
+            switch(type) {
+                case 'core': color = 'shadow-yellow-400'; break;
+                case 'distribution': color = 'shadow-blue-400'; break;
+                case 'access': color = 'shadow-green-400'; break;
+            }
+
+            nodeEl.style.transform = 'scale(1.15)';
+            nodeEl.classList.add(color, 'animate-pulse');
+            
+            await sleep(duration);
+
+            nodeEl.style.transform = 'scale(1.0)';
+            nodeEl.classList.remove(color, 'animate-pulse');
+        }
+
+        /** Animates a packet from one position to the next */
+        function movePacket(element, startPos, endPos, duration) {
+            return new Promise(resolve => {
+                element.style.transition = `all ${duration / 1000}s ease-in-out`;
+                
+                const offsetX = -7.5; // Centering adjustment
+                const offsetY = -7.5; 
+
+                // Ensure the transition starts after the style is applied
+                setTimeout(() => {
+                    element.style.left = `${endPos.x + offsetX}px`;
+                    element.style.top = `${endPos.y + offsetY}px`;
+                }, 50); 
+                
+                setTimeout(() => {
+                    resolve();
+                }, duration);
+            });
+        }
+
+        // --- Event Listeners and Initial Setup ---
+        
+        // Use a window load event to ensure all dimensions are calculated
+        window.addEventListener('load', initializeVisualization);
+        window.addEventListener('resize', initializeVisualization);
+    </script>
+</body>
+</html>

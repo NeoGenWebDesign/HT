@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Client-Server Network Simulator</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Consolas', 'Courier New', monospace;
+            background: linear-gradient(180deg, #353636 50%, #032a36 75%);
+            min-height: 100vh;
+        }
+        a {
+            display: block;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            text-align: center;
+        }
+        .container-card {
+            background-color: white;
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+            padding: 2rem;
+        }
+        .vis-area {
+            position: relative;
+            height: 400px;
+            width: 100%;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.75rem;
+            background-color: #f9fafb;
+            margin-bottom: 1.5rem;
+        }
+        .node {
+            position: absolute;
+            width: 70px;
+            height: 70px;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            font-weight: bold;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
+            transition: background-color 0.3s, transform 0.3s;
+            z-index: 10;
+            cursor: default;
+        }
+        .server-node {
+            background-color: #3b82f6; /* Blue for Server */
+            width: 80px;
+            height: 80px;
+            border-radius: 1rem;
+        }
+        .client-node {
+            background-color: #10b981; /* Green for Clients */
+        }
+        .node-label {
+            font-size: 0.7rem;
+            margin-top: 2px;
+            opacity: 0.8;
+        }
+        .link {
+            position: absolute;
+            background-color: #9ca3af; /* Gray */
+            height: 2px;
+            transform-origin: 0 0;
+            z-index: 5;
+            transition: background-color 0.3s;
+        }
+        .packet {
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            z-index: 20;
+            transition: transform linear;
+            box-shadow: 0 0 8px currentColor;
+        }
+        .request-packet {
+            background-color: #f59e0b; /* Amber for Request */
+            color: #f59e0b;
+        }
+        .response-packet {
+            background-color: #f97316; /* Orange for Response */
+            color: #f97316;
+        }
+        .console-log {
+            min-height: 200px;
+            background-color: #1f2937;
+            color: #d1d5db;
+            font-family: 'Consolas', 'Courier New', monospace;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            font-size: 0.85rem;
+        }
+        .log-request { color: #f59e0b; } /* Amber */
+        .log-response { color: #34d399; } /* Light Green */
+        .log-error { color: #ef4444; font-weight: bold; } /* Red */
+        .log-info { color: #9ca3af; }
+    </style>
+</head>
+<body class="p-4 md:p-10 min-h-screen">
+
+    <div class="max-w-4xl mx-auto">
+        <h1 class="text-4xl font-extrabold text-orange-500 mb-2 text-center">
+            Client-Server Model Simulator
+        </h1>
+        <p class="text-lg text-white mb-6 text-center">
+            Visualize the centralized network architecture.
+        </p>
+        <p class="text-sm text-yellow-500 mb-8 text-center">
+            Press F5 or Reload/Refresh Browser to Reset Simulation.
+        </p>
+        <a id="link" class="text-sm hover:text-lime-500 text-yellow-200 mb-8 text-center" href="index.html">
+            Back to Simulations Index
+        </a>
+
+        <div class="container-card">
+            <p class="text-gray-700 mb-4 text-sm">
+                [Image of Client-Server Network Topology]
+                In a Client-Server model, one or more powerful **Servers** manage resources (files, applications, authentication), and many **Clients** (PCs, phones) request these resources. The communication is always initiated by the Client. The Server is a single point of failure and management.
+            </p>
+            
+            <div id="cs-vis" class="vis-area"></div>
+
+            <div class="flex flex-col sm:flex-row gap-4 mb-6 items-center">
+                <button onclick="simulateRequest('C1')" id="c1-req-btn"
+                        class="flex-grow bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition duration-150 text-center text-sm">
+                    Client 1: Data Request (HTTP GET)
+                </button>
+                <button onclick="simulateRequest('C3', 'Auth')" id="c3-auth-btn"
+                        class="flex-grow bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition duration-150 text-center text-sm">
+                    Client 3: Authentication Request
+                </button>
+                <div class="flex-shrink-0 flex items-center bg-gray-100 p-3 rounded-lg shadow-inner">
+                    <label for="server-toggle" class="mr-3 text-sm font-medium text-gray-700 whitespace-nowrap">Server S1 Status:</label>
+                    <input type="checkbox" id="server-toggle" checked class="form-checkbox h-5 w-5 text-red-600 transition duration-150 ease-in-out" onchange="toggleServerStatus(this.checked)">
+                    <span id="server-status-label" class="ml-2 font-bold text-green-600">ONLINE</span>
+                </div>
+            </div>
+
+            <h3 class="text-xl font-semibold text-gray-800 mb-3">Network Console Log</h3>
+            <div id="cs-log" class="console-log">
+                <p class="log-info">Network is initialized. Server S1 is ONLINE. Click a button above to start a transaction.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const NODE_SIZE = 70;
+        const SERVER_SIZE = 80;
+        const DURATION = 1200; // Animation duration in ms
+        let animationLocked = false;
+        let isServerOnline = true;
+        
+        // Node Topology (coordinates scaled relative to a 600px width)
+        const CS_NODES = {
+            S1: { id: 'S1', type: 'server', x: 300, y: 200, label: 'Server' },
+            C1: { id: 'C1', type: 'client', x: 150, y: 100, label: 'Client' },
+            C2: { id: 'C2', type: 'client', x: 450, y: 100, label: 'Client' },
+            C3: { id: 'C3', type: 'client', x: 100, y: 300, label: 'Client' },
+            C4: { id: 'C4', type: 'client', x: 500, y: 300, label: 'Client' }
+        };
+
+        // --- Utility Functions ---
+
+        /** Logs a message to the console element */
+        function log(message, type = 'log-info') {
+            const consoleEl = document.getElementById('cs-log');
+            const timestamp = new Date().toLocaleTimeString('en-US', { hour12: false, second: '2-digit', minute: '2-digit' });
+            consoleEl.innerHTML += `[${timestamp}] <span class="${type}">${message}</span>\n`;
+            consoleEl.scrollTop = consoleEl.scrollHeight;
+        }
+
+        /** Clears the visualization container and returns its dimensions */
+        function clearAndGetDimensions(containerId) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = '';
+            
+            // Recalculate node positions based on container width
+            const { width } = container.getBoundingClientRect();
+            
+            // Scale factor based on assumed 600px default width
+            const scaleFactor = width / 600;
+            
+            Object.values(CS_NODES).forEach(node => {
+                // Adjust coordinates based on current width 
+                node._x = node.x * scaleFactor;
+                node._y = node.y; // Y coordinates are kept constant
+            });
+        }
+
+        /** Draws a node element (Client or Server) */
+        function createNode(id, x, y, type) {
+            const container = document.getElementById('cs-vis');
+            const node = document.createElement('div');
+            
+            const size = type === 'server' ? SERVER_SIZE : NODE_SIZE;
+            const classType = type === 'server' ? 'server-node' : 'client-node';
+
+            node.className = `node ${classType}`;
+            node.id = `node-${id}`;
+            
+            // Set position, adjusting for size to center it
+            node.style.left = `${x - size / 2}px`;
+            node.style.top = `${y - size / 2}px`;
+
+            let iconHtml = '';
+            if (type === 'server') {
+                iconHtml = '<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 7v10h16V7H4zm16 0h-4m-4 0h-4M8 7v10m8-10v10m-4-10v10" /></svg>';
+            } else {
+                iconHtml = '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1v-3.25m-7.25 0h14.5a.75.75 0 00.75-.75V7.75a.75.75 0 00-.75-.75H4.25a.75.75 0 00-.75.75v8.25c0 .414.336.75.75.75z" /></svg>';
+            }
+
+            node.innerHTML = `${iconHtml}<span>${id}</span><span class="node-label">${CS_NODES[id].label}</span>`;
+            
+            container.appendChild(node);
+        }
+
+        /** Draws a link line between a client and the central server */
+        function createLink(clientId, serverId, x1, y1, x2, y2) {
+            const container = document.getElementById('cs-vis');
+            const dx = x2 - x1;
+            const dy = y2 - y1;
+            const length = Math.sqrt(dx * dx + dy * dy);
+            const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+
+            const link = document.createElement('div');
+            link.className = 'link';
+            link.id = `link-${clientId}-${serverId}`;
+            
+            link.style.width = `${length}px`;
+            link.style.left = `${x1}px`;
+            link.style.top = `${y1}px`;
+            link.style.transform = `rotate(${angle}deg)`;
+            container.appendChild(link);
+            return link;
+        }
+
+        /** Gets the center coordinates of a node */
+        function getNodeCenter(nodeId) {
+            const computedPos = CS_NODES[nodeId];
+            return {
+                x: computedPos._x,
+                y: computedPos._y
+            };
+        }
+
+        /** Animates a packet from start to end */
+        function animatePacket(startX, startY, endX, endY, linkEl, type, duration) {
+            return new Promise(resolve => {
+                const container = document.getElementById('cs-vis');
+                const packet = document.createElement('div');
+                packet.className = `packet ${type}`;
+                
+                // Initial position (centered on start node)
+                packet.style.left = `${startX - 8}px`;
+                packet.style.top = `${startY - 8}px`;
+                
+                container.appendChild(packet);
+                
+                // Calculate translation needed for the move
+                const translateX = endX - startX;
+                const translateY = endY - startY;
+
+                // Set up transition properties
+                packet.style.transitionDuration = `${duration}ms`;
+                
+                // Highlight link during transfer
+                if (linkEl) {
+                    linkEl.style.backgroundColor = type === 'request-packet' ? '#f59e0b' : '#34d399';
+                    linkEl.style.height = '4px';
+                }
+
+                // Trigger the move
+                requestAnimationFrame(() => {
+                    packet.style.transform = `translate(${translateX}px, ${translateY}px)`;
+                });
+
+                // Wait for animation to finish
+                setTimeout(() => {
+                    packet.remove();
+                    if (linkEl) {
+                        linkEl.style.backgroundColor = '#9ca3af';
+                        linkEl.style.height = '2px';
+                    }
+                    resolve();
+                }, duration);
+            });
+        }
+
+        // --- Core Client-Server Functions ---
+
+        function drawCSNetwork() {
+            clearAndGetDimensions('cs-vis'); 
+
+            // 1. Draw Server (S1)
+            const S1_POS = CS_NODES.S1;
+            createNode(S1_POS.id, S1_POS._x, S1_POS._y, S1_POS.type);
+
+            // 2. Draw Clients and Links
+            Object.values(CS_NODES).filter(n => n.type === 'client').forEach(clientPos => {
+                createNode(clientPos.id, clientPos._x, clientPos._y, clientPos.type);
+                // Link Client to Server
+                createLink(clientPos.id, S1_POS.id, clientPos._x, clientPos._y, S1_POS._x, S1_POS._y);
+            });
+            
+            // Apply current server status visual
+            updateServerVisual();
+        }
+
+        function updateServerVisual() {
+            const serverNode = document.getElementById('node-S1');
+            const statusLabel = document.getElementById('server-status-label');
+
+            if (serverNode) {
+                if (isServerOnline) {
+                    serverNode.classList.remove('bg-gray-500');
+                    serverNode.classList.add('bg-blue-600');
+                    serverNode.style.boxShadow = '0 4px 8px rgba(59, 130, 246, 0.6)';
+                    statusLabel.textContent = 'ONLINE';
+                    statusLabel.classList.replace('text-red-600', 'text-green-600');
+                } else {
+                    serverNode.classList.remove('bg-blue-600');
+                    serverNode.classList.add('bg-gray-500');
+                    serverNode.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.2)';
+                    statusLabel.textContent = 'OFFLINE';
+                    statusLabel.classList.replace('text-green-600', 'text-red-600');
+                }
+            }
+        }
+
+        function toggleServerStatus(checked) {
+            isServerOnline = checked;
+            log(`Server S1 status manually set to ${isServerOnline ? 'ONLINE' : 'OFFLINE'}.`, isServerOnline ? 'log-info' : 'log-error');
+            updateServerVisual();
+        }
+
+
+        async function simulateRequest(clientId, requestType = 'Data') {
+            if (animationLocked) return;
+            animationLocked = true;
+            document.querySelectorAll('button').forEach(btn => btn.disabled = true);
+            
+            const serverId = 'S1';
+            const clientPos = getNodeCenter(clientId);
+            const serverPos = getNodeCenter(serverId);
+            
+            log('-------------------------------------------', 'log-info');
+            log(`Simulation Start: ${clientId} sends ${requestType} Request to ${serverId}.`, 'log-request');
+
+            // Find the direct link element
+            const linkEl = document.getElementById(`link-${clientId}-${serverId}`);
+
+            // 1. Client Sends Request (Client Role)
+            await animatePacket(clientPos.x, clientPos.y, serverPos.x, serverPos.y, linkEl, 'request-packet', DURATION / 2);
+
+            // 2. Server Processes Request (Server Role)
+            if (!isServerOnline) {
+                log(`Server ${serverId} is OFFLINE. Request timed out/rejected. Connection failed.`, 'log-error');
+                
+                // No response packet, just log the failure
+                document.querySelectorAll('button').forEach(btn => btn.disabled = false);
+                animationLocked = false;
+                return;
+            }
+
+            // Simulate processing time
+            await new Promise(r => setTimeout(r, 500)); 
+
+            // 3. Server Sends Response (Server Role)
+            let responseContent;
+            let responseType = 'log-response';
+            
+            if (requestType === 'Auth') {
+                responseContent = '200 OK: Authentication successful. Token issued.';
+            } else {
+                responseContent = '200 OK: Requested data packet delivered.';
+            }
+
+            log(`Server ${serverId} processes, responds with: "${responseContent.split(':')[1].trim()}".`, 'log-response');
+            
+            await animatePacket(serverPos.x, serverPos.y, clientPos.x, clientPos.y, linkEl, 'response-packet', DURATION / 2);
+            
+            log(`Transaction Complete: ${clientId} received the Server's response.`, responseType);
+
+            animationLocked = false;
+            document.querySelectorAll('button').forEach(btn => btn.disabled = false);
+        }
+        
+        // Handle initial drawing and window resizing
+        window.addEventListener('load', drawCSNetwork);
+        window.addEventListener('resize', drawCSNetwork);
+    </script>
+</body>
+</html>

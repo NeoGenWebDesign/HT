@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VLAN Trunking and 802.1Q Simulation</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Consolas', 'Courier New', monospace;
+            background: linear-gradient(180deg, #353636 50%, #032a36 75%);
+            min-height: 100vh;
+        }
+        a {
+            display: block;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            text-align: center;
+        }
+        .container-card {
+            background-color: white;
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+            padding: 2rem;
+        }
+        .vis-area {
+            position: relative;
+            height: 400px;
+            width: 100%;
+            margin-bottom: 2rem;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.75rem;
+            background-color: #f9fafb;
+        }
+        .network-device {
+            position: absolute;
+            width: 100px;
+            height: 100px;
+            border-radius: 0.75rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.875rem;
+            font-weight: bold;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            z-index: 10;
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+        .switch {
+            background-color: #1d4ed8; 
+            color: white;
+            border: 2px solid #3b82f6;
+        }
+        .host {
+            background-color: #059669; 
+            color: white;
+            border: 2px solid #10b981;
+        }
+        .link {
+            position: absolute;
+            height: 3px;
+            background-color: #94a3b8;
+            transform-origin: 0 0;
+            z-index: 5;
+        }
+        .frame-packet {
+            position: absolute;
+            width: 18px;
+            height: 18px;
+            background-color: #f97316; /* Orange for untagged frames */
+            border-radius: 50%;
+            z-index: 20;
+            opacity: 0;
+            transition: opacity 0.1s, background-color 0.3s;
+        }
+
+        /* Styles for the 802.1Q Tag visualization */
+        .frame-packet.tagged {
+            background-color: #ef4444; /* Red for tagged frames */
+            border: 2px solid #f97316;
+            width: 20px;
+            height: 20px;
+        }
+
+        .flashing {
+            animation: pulse-flash 0.5s infinite alternate;
+        }
+        @keyframes pulse-flash {
+            from { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.7); }
+            to { box-shadow: 0 0 10px 10px rgba(249, 115, 22, 0); }
+        }
+        .console-log {
+            min-height: 120px;
+            max-height: 250px;
+            background-color: #1f2937;
+            color: #d1d5db;
+            font-family: 'Consolas', 'Courier New', monospace;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            font-size: 0.85rem;
+        }
+        .log-vlan { color: #818cf8; } /* Purple/Indigo for VLAN */
+        .log-tag { color: #ef4444; } /* Red for Tagging action */
+        .log-mac { color: #fcd34d; }
+        
+        .legend-box {
+            display: inline-block;
+            width: 15px;
+            height: 15px;
+            border-radius: 4px;
+            margin-right: 5px;
+            vertical-align: middle;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-10 min-h-screen">
+
+    <div class="max-w-6xl mx-auto">
+        <h1 class="text-3xl font-extrabold text-orange-500 mb-2 text-center">
+            VLAN Trunking and 802.1Q Tagging Simulation
+        </h1>
+        <p class="text-lg text-white mb-6 text-center">
+            Visualize how an Ethernet frame is tagged and transported across a trunk link between two switches.
+        </p>
+        <p class="text-sm text-yellow-500 mb-8 text-center">
+            Press F5 or Reload/Refresh Browser to Reset Simulation.
+        </p>
+        <a id="link" class="text-sm hover:text-lime-500 text-yellow-200 mb-8 text-center" href="index.html">
+            Back to Simulations Index
+        </a>
+
+        <div class="container-card">
+            
+            <div class="grid md:grid-cols-3 gap-6 mb-6">
+                <div class="bg-indigo-50 p-4 rounded-lg">
+                    <h4 class="font-bold text-indigo-700">VLANs</h4>
+                    <p class="text-sm">VLANs segment a broadcast domain, allowing devices on the same VLAN to communicate, regardless of physical location.</p>
+                </div>
+                <div class="bg-indigo-50 p-4 rounded-lg">
+                    <h4 class="font-bold text-indigo-700">Trunk Link</h4>
+                    <p class="text-sm">A link between two switches that carries traffic for multiple VLANs. Requires a standard like 802.1Q.</p>
+                </div>
+                <div class="bg-indigo-50 p-4 rounded-lg">
+                    <h4 class="font-bold text-indigo-700">802.1Q Tagging</h4>
+                    <p class="text-sm">The IEEE standard that inserts a 4-byte tag into the Ethernet frame header to identify which VLAN the frame belongs to.</p>
+                </div>
+            </div>
+
+            <!-- Simulation Area -->
+            <div id="vis-area" class="vis-area">
+                <!-- Topology elements will be injected here -->
+            </div>
+
+            <div class="flex flex-col sm:flex-row justify-center space-y-4 sm:space-y-0 sm:space-x-6 mb-6">
+                <select id="vlan-select" class="bg-white border border-gray-300 rounded-lg p-3 text-sm shadow-md">
+                    <option value="10">Send Frame from VLAN 10 (Marketing)</option>
+                    <option value="20">Send Frame from VLAN 20 (Engineering)</option>
+                </select>
+                <button onclick="startSimulation()" id="start-btn"
+                        class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg shadow-xl transition duration-150 text-center text-sm disabled:opacity-50">
+                    Start Trunking Simulation
+                </button>
+                <button onclick="resetSimulation()" id="reset-btn" disabled
+                        class="bg-gray-400 hover:bg-gray-500 text-white font-bold py-3 px-6 rounded-lg shadow-xl transition duration-150 text-center text-sm disabled:opacity-50">
+                    Reset
+                </button>
+            </div>
+            
+            <div class="text-sm text-gray-600 mt-4 mb-2">
+                Legend: 
+                <span class="legend-box bg-[#f97316]"></span> Untagged Frame (Access Link)
+                <span class="legend-box bg-[#ef4444] border-2 border-orange-500"></span> Tagged Frame (Trunk Link)
+            </div>
+
+            <h3 class="text-xl font-semibold text-gray-800 mb-3">Simulation Log</h3>
+            <div id="sim-log" class="console-log">
+                <p class="log-mac">Setup: Two hosts on two different VLANs (10/20) connected across two switches (SW1 and SW2). The link between SW1 and SW2 is a trunk.</p>
+                <p class="log-mac">Select a VLAN and click 'Start Trunking Simulation' to see the 802.1Q process.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Network Topology ---
+        const TOPOLOGY = {
+            HostA: { id: 'HostA', mac: '00:A1', vlan: 10, x: 100, y: 120, type: 'host' },
+            HostB: { id: 'HostB', mac: '00:B1', vlan: 20, x: 100, y: 280, type: 'host' },
+            SW1: { id: 'SW1', mac: '00:S1', x: 350, y: 200, type: 'switch', ports: {
+                'Link-A-1': 10, // Access port VLAN 10
+                'Link-B-1': 20, // Access port VLAN 20
+                'Link-1-2': 'TRUNK' // Trunk port
+            }},
+            SW2: { id: 'SW2', mac: '00:S2', x: 650, y: 200, type: 'switch', ports: {
+                'Link-2-C': 10,
+                'Link-2-D': 20,
+                'Link-1-2': 'TRUNK'
+            }},
+            HostC: { id: 'HostC', mac: '00:C1', vlan: 10, x: 900, y: 120, type: 'host' },
+            HostD: { id: 'HostD', mac: '00:D1', vlan: 20, x: 900, y: 280, type: 'host' },
+        };
+        
+        // Defines the visual links and their associated nodes
+        const LINKS = [
+            { id: 'Link-A-1', from: 'HostA', to: 'SW1', isTrunk: false },
+            { id: 'Link-B-1', from: 'HostB', to: 'SW1', isTrunk: false },
+            { id: 'Link-1-2', from: 'SW1', to: 'SW2', isTrunk: true, label: '802.1Q TRUNK' },
+            { id: 'Link-2-C', from: 'SW2', to: 'HostC', isTrunk: false },
+            { id: 'Link-2-D', from: 'SW2', to: 'HostD', isTrunk: false }
+        ];
+
+        let isRunning = false;
+        let activeFrames = []; // Stores frame objects {id, linkId, progress, status, vlan}
+        let animationRequestId;
+        let logLine = 0;
+
+        // --- Utility Functions ---
+
+        function log(message, type = '') {
+            const consoleEl = document.getElementById('sim-log');
+            consoleEl.innerHTML += `<span class="${type}">[${logLine++}]: ${message}</span>\n`;
+            consoleEl.scrollTop = consoleEl.scrollHeight;
+        }
+
+        function initializeVisualization() {
+            const container = document.getElementById('vis-area');
+            container.innerHTML = '';
+            const { width, height } = container.getBoundingClientRect();
+            
+            // Normalize coordinates based on container size
+            const scaleX = width / 1000;
+            const scaleY = height / 400; 
+
+            // 1. Draw Links
+            LINKS.forEach(link => {
+                drawLink(link.from, link.to, scaleX, scaleY, container, link.id, link.isTrunk, link.label);
+            });
+
+            // 2. Draw Nodes
+            Object.keys(TOPOLOGY).forEach(id => {
+                const data = TOPOLOGY[id];
+                const x = data.x * scaleX;
+                const y = data.y * scaleY;
+                
+                const el = document.createElement('div');
+                el.className = `network-device ${data.type === 'host' ? 'host' : 'switch'}`;
+                el.id = id;
+                // Center the device element
+                el.style.left = `${x - 50}px`; 
+                el.style.top = `${y - 50}px`; 
+                
+                let vlanInfo = '';
+                if (data.vlan) {
+                    vlanInfo = `<div class="text-xs font-semibold mt-1">VLAN ${data.vlan}</div>`;
+                }
+
+                el.innerHTML = `
+                    <div class="text-lg">${id}</div>
+                    ${data.type === 'switch' ? '<div class="text-xs">TRUNK (802.1Q)</div>' : vlanInfo}
+                `;
+                container.appendChild(el);
+            });
+        }
+        
+        function drawLink(id1, id2, scaleX, scaleY, container, linkId, isTrunk, label) {
+            const start = { x: TOPOLOGY[id1].x * scaleX, y: TOPOLOGY[id1].y * scaleY };
+            const end = { x: TOPOLOGY[id2].x * scaleX, y: TOPOLOGY[id2].y * scaleY };
+            
+            const dx = end.x - start.x;
+            const dy = end.y - start.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+            
+            const linkEl = document.createElement('div');
+            linkEl.className = 'link';
+            linkEl.id = linkId;
+            linkEl.dataset.from = id1;
+            linkEl.dataset.to = id2;
+            linkEl.style.width = `${distance}px`;
+            linkEl.style.left = `${start.x}px`;
+            linkEl.style.top = `${start.y}px`;
+            linkEl.style.transform = `rotate(${angle}deg)`;
+            linkEl.style.backgroundColor = isTrunk ? '#ef4444' : '#94a3b8'; // Red for Trunk
+            
+            container.appendChild(linkEl);
+
+            if (label) {
+                const labelEl = document.createElement('div');
+                labelEl.className = 'absolute text-xs font-bold text-red-600 bg-white px-2 py-1 rounded shadow-lg';
+                labelEl.style.left = `${start.x + dx / 2 - 50}px`;
+                labelEl.style.top = `${start.y + dy / 2 - 20}px`;
+                labelEl.textContent = label;
+                container.appendChild(labelEl);
+            }
+        }
+
+        function createFrame(linkId, vlan) {
+            const linkEl = document.getElementById(linkId);
+            if (!linkEl) return;
+            
+            const isTrunk = linkEl.dataset.from === 'SW1' && linkEl.dataset.to === 'SW2';
+            
+            const container = document.getElementById('vis-area');
+            const frameEl = document.createElement('div');
+            const frameId = `frame-${Date.now()}-${Math.random()}`;
+            frameEl.className = `frame-packet ${isTrunk ? 'tagged' : ''}`;
+            frameEl.id = frameId;
+            frameEl.style.opacity = '1';
+
+            container.appendChild(frameEl);
+            
+            const frame = {
+                id: frameId,
+                element: frameEl,
+                linkId: linkId,
+                progress: 0,
+                vlan: vlan,
+                isTagged: isTrunk,
+                direction: 1 // 1 for 'from' to 'to'
+            };
+            activeFrames.push(frame);
+            return frame;
+        }
+
+        // --- Simulation Logic ---
+        
+        function startSimulation() {
+            if (isRunning) return;
+            isRunning = true;
+            document.getElementById('start-btn').disabled = true;
+            document.getElementById('reset-btn').disabled = false;
+            
+            logLine = 0;
+            document.getElementById('sim-log').innerHTML = '';
+            
+            const selectedVLAN = parseInt(document.getElementById('vlan-select').value);
+            let startHostId = selectedVLAN === 10 ? 'HostA' : 'HostB';
+            let initialLink = selectedVLAN === 10 ? 'Link-A-1' : 'Link-B-1';
+
+            log(`${startHostId} (VLAN ${selectedVLAN}) sends an Untagged Frame destined for a host on the same VLAN (e.g., Host C or D).`, 'log-vlan');
+            
+            // Initial frame from Host to SW1
+            createFrame(initialLink, selectedVLAN); 
+            document.getElementById(startHostId).classList.add('flashing');
+            
+            animateTrunking();
+        }
+
+        function processSwitch(frame, ingressNodeId, egressNodeId) {
+            
+            const swId = ingressNodeId;
+            const linkEl = document.getElementById(frame.linkId);
+            const ingressLink = frame.linkId;
+            
+            document.getElementById(swId).classList.add('flashing');
+
+            // --- SW1: Ingress Switch ---
+            if (swId === 'SW1') {
+                log(`SW1: Frame received on Access Port (VLAN ${frame.vlan}).`, 'log-vlan');
+                log(`SW1: Destination is on remote switch (SW2). Frame must be sent over the TRUNK.`, 'log-mac');
+
+                // Tagging Action
+                log(`SW1: Applying IEEE <span class="log-tag">802.1Q Tag</span> (VLAN ID: ${frame.vlan}) to the frame.`, 'log-tag');
+                
+                // Remove processed frame
+                frame.element.remove();
+                activeFrames = activeFrames.filter(f => f.id !== frame.id);
+                
+                // Create a new, tagged frame on the trunk link
+                const taggedFrame = createFrame('Link-1-2', frame.vlan);
+                taggedFrame.element.classList.add('tagged');
+                taggedFrame.isTagged = true;
+                
+                return;
+            } 
+            
+            // --- SW2: Egress Switch ---
+            if (swId === 'SW2') {
+                log(`SW2: Frame received on TRUNK Link. Tag detected: VLAN ${frame.vlan}.`, 'log-tag');
+                
+                // Untagging Action
+                log(`SW2: Removing the <span class="log-tag">802.1Q Tag</span>.`, 'log-tag');
+                log(`SW2: Forwarding the now Untagged frame to the Access Port for VLAN ${frame.vlan}.`, 'log-vlan');
+                
+                // Determine the correct egress access link
+                let egressLink;
+                let finalHostId;
+                if (frame.vlan === 10) {
+                    egressLink = 'Link-2-C';
+                    finalHostId = 'HostC';
+                } else if (frame.vlan === 20) {
+                    egressLink = 'Link-2-D';
+                    finalHostId = 'HostD';
+                }
+
+                if (egressLink) {
+                    // Remove processed frame
+                    frame.element.remove();
+                    activeFrames = activeFrames.filter(f => f.id !== frame.id);
+
+                    // Create a new, untagged frame on the access link
+                    const untaggedFrame = createFrame(egressLink, frame.vlan);
+                    untaggedFrame.element.classList.remove('tagged');
+                    untaggedFrame.isTagged = false;
+                } else {
+                    log(`SW2: ERROR - No destination host found for VLAN ${frame.vlan}. Dropping frame.`, 'log-tag');
+                    stopSimulation();
+                }
+                
+                return;
+            }
+        }
+
+        function processHost(frame, hostId) {
+            document.getElementById(hostId).classList.add('flashing');
+            
+            if (frame.isTagged) {
+                // This shouldn't happen in a correctly configured network
+                log(`${hostId}: ERROR - Received a Tagged frame. Access ports should only receive Untagged frames. Dropping frame.`, 'log-tag');
+            } else {
+                log(`${hostId}: Received Untagged Frame. The frame belongs to VLAN ${frame.vlan} and is accepted. Communication successful!`, 'log-vlan');
+            }
+
+            // Remove the frame that reached the host
+            frame.element.remove();
+            activeFrames = activeFrames.filter(f => f.id !== frame.id);
+        }
+
+        function animateTrunking() {
+            if (!isRunning) return;
+
+            const speed = 0.02; 
+            const framesToProcess = [...activeFrames]; 
+            
+            framesToProcess.forEach(frame => {
+                frame.progress += speed;
+                
+                const linkEl = document.getElementById(frame.linkId);
+                if (!linkEl) return;
+                
+                const linkLength = parseFloat(linkEl.style.width);
+                const angle = parseFloat(linkEl.style.transform.match(/rotate\(([^)]+)/)[1]) * (Math.PI / 180);
+
+                const travelDistance = linkLength * frame.progress;
+                
+                const baseX = parseFloat(linkEl.style.left);
+                const baseY = parseFloat(linkEl.style.top);
+                
+                // Calculate frame position
+                const dx = Math.cos(angle) * travelDistance;
+                const dy = Math.sin(angle) * travelDistance;
+                
+                frame.element.style.left = `${baseX + dx - 9}px`; 
+                frame.element.style.top = `${baseY + dy - 9}px`;
+
+                // If frame reached the end of the link
+                if (frame.progress >= 1.0) {
+                    const ingressNodeId = linkEl.dataset.from;
+                    const destinationId = linkEl.dataset.to;
+                    const destinationType = TOPOLOGY[destinationId].type;
+                    
+                    if (destinationType === 'switch') {
+                        processSwitch(frame, destinationId, ingressNodeId);
+                    } else if (destinationType === 'host') {
+                        processHost(frame, destinationId);
+                    }
+                    
+                    if (activeFrames.length === 0) {
+                        stopSimulation();
+                        return;
+                    }
+                }
+            });
+
+            if (activeFrames.length > 0) {
+                animationRequestId = requestAnimationFrame(animateTrunking);
+            }
+        }
+
+        function stopSimulation() {
+            isRunning = false;
+            document.getElementById('start-btn').textContent = 'Simulation Complete';
+            document.getElementById('start-btn').disabled = true;
+            document.getElementById('reset-btn').disabled = false;
+
+            // Remove flashing class from all devices
+            document.querySelectorAll('.network-device').forEach(el => el.classList.remove('flashing'));
+        }
+
+        function resetSimulation() {
+            if (animationRequestId) {
+                cancelAnimationFrame(animationRequestId);
+            }
+            isRunning = false;
+            
+            activeFrames.forEach(f => f.element.remove());
+            activeFrames = [];
+            
+            logLine = 0;
+            document.getElementById('sim-log').innerHTML = '<p class="log-mac">Simulation Reset. Select a VLAN and click Start.</p>';
+            
+            document.getElementById('start-btn').disabled = false;
+            document.getElementById('start-btn').textContent = 'Start Trunking Simulation';
+            document.getElementById('reset-btn').disabled = true;
+
+            document.querySelectorAll('.network-device').forEach(el => el.classList.remove('flashing'));
+            initializeVisualization(); // Re-render initial state
+        }
+        
+        // --- Event Listeners and Initial Setup ---
+        
+        window.addEventListener('load', initializeVisualization);
+        window.addEventListener('resize', initializeVisualization);
+
+    </script>
+</body>
+</html>

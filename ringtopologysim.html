@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ring Network Topology Simulator</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Consolas', 'Courier New', monospace;
+            background: linear-gradient(180deg, #353636 50%, #032a36 75%);
+            min-height: 100vh;
+        }
+        a {
+            display: block;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            text-align: center;
+        }
+        .container-card {
+            background-color: white;
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+            padding: 2rem;
+        }
+        .vis-area {
+            position: relative;
+            height: 450px;
+            width: 100%;
+            border-radius: 0.75rem;
+            background-color: #fff;
+            margin-bottom: 1.5rem;
+            overflow: hidden;
+        }
+        .node {
+            position: absolute;
+            width: 65px;
+            height: 65px;
+            background-color: #0d9488; /* Teal for Nodes */
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.9rem;
+            font-weight: bold;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            transition: background-color 0.3s, transform 0.3s;
+            z-index: 10;
+            cursor: pointer;
+        }
+        .node:hover {
+            transform: scale(1.05);
+        }
+        .packet {
+            position: absolute;
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            background-color: #f97316; /* Orange for data */
+            z-index: 20;
+            transition: all linear;
+            box-shadow: 0 0 8px #f97316;
+        }
+        /* Ring links are drawn using a div that covers the whole ring */
+        .ring-path {
+            position: absolute;
+            width: 320px; /* Diameter of the path */
+            height: 320px;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            border: 3px solid #9ca3af; /* Gray link path */
+            border-radius: 50%;
+            z-index: 5;
+        }
+        .broken-link {
+            border-color: #dc2626 !important; /* Red for broken */
+            animation: pulse-red 1s infinite alternate;
+        }
+        @keyframes pulse-red {
+            from { box-shadow: 0 0 0px #ef4444; }
+            to { box-shadow: 0 0 15px #ef4444; }
+        }
+        .console-log {
+            min-height: 200px;
+            background-color: #1f2937;
+            color: #d1d5db;
+            font-family: 'Consolas', 'Courier New', monospace;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            font-size: 0.85rem;
+        }
+        .log-send { color: #f97316; } /* Orange */
+        .log-inspect { color: #facc15; } /* Yellow */
+        .log-accept { color: #34d399; } /* Light Green */
+        .log-fail { color: #ef4444; font-weight: bold; } /* Red */
+        .log-info { color: #93c5fd; } /* Blue */
+    </style>
+</head>
+<body class="p-4 md:p-10 min-h-screen">
+
+    <div class="max-w-4xl mx-auto">
+        <h1 class="text-4xl font-extrabold text-orange-500 mb-2 text-center">
+            Ring Network Topology Simulation
+        </h1>
+        <p class="text-lg text-white mb-6 text-center">
+            Simulating sequential data flow and token passing behavior.
+        </p>
+        <p class="text-sm text-yellow-500 mb-8 text-center">
+            Press F5 or Reload/Refresh Browser to Reset Simulation.
+        </p>
+        <a id="link" class="text-sm hover:text-lime-500 text-yellow-200 mb-8 text-center" href="index.html">
+            Back to Simulations Index
+        </a>
+
+        <div class="container-card">
+            <p class="text-gray-700 mb-4 text-sm">
+                [Image of Ring Network Topology]
+                In a Ring Topology, each device is connected to exactly two other devices, forming a single circular path. Data flows in only one direction (unidirectional). The central concept is **Token Passing** (as used in Token Ring) where a special frame (the token) controls access. If a node fails, it breaks the ring, causing a **single point of failure** for the entire network.
+            </p>
+            
+            <div id="ring-vis" class="vis-area">
+                <!-- Visualization elements will be injected here -->
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 items-end">
+                <div class="bg-gray-100 p-3 rounded-lg flex flex-col justify-center">
+                    <label class="text-sm font-medium text-gray-700 mb-1">Source Node:</label>
+                    <select id="source-select" class="p-2 border border-gray-300 rounded-md"></select>
+                </div>
+                <div class="bg-gray-100 p-3 rounded-lg flex flex-col justify-center">
+                    <label class="text-sm font-medium text-gray-700 mb-1">Target Node:</label>
+                    <select id="target-select" class="p-2 border border-gray-300 rounded-md"></select>
+                </div>
+                
+                <button onclick="simulateTransmission()" id="send-btn"
+                        class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition duration-150 text-center text-sm disabled:opacity-50">
+                    Start Transmission (Clockwise)
+                </button>
+                <button onclick="toggleLinkFailure()" id="fail-btn"
+                        class="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition duration-150 text-center text-sm">
+                    Simulate Link Failure
+                </button>
+            </div>
+
+            <h3 class="text-xl font-semibold text-gray-800 mb-3">Network Console Log</h3>
+            <div id="ring-log" class="console-log">
+                <p class="log-info">Network is initialized. Select Source and Target nodes above, then click 'Start Transmission'.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const NODE_COUNT = 6;
+        const NODE_IDS = Array.from({ length: NODE_COUNT }, (_, i) => String.fromCharCode(65 + i)); // A, B, C, D, E, F
+        const MOVEMENT_SPEED_MS = 1000;
+        const RING_RADIUS = 160;
+        const CENTER_POS = { x: 0, y: 0 }; // Will be calculated dynamically
+        
+        let animationLocked = false;
+        let isLinkFailed = false;
+        let nodePositions = {}; // Stores calculated X, Y coordinates for each node
+
+        // --- Utility Functions ---
+
+        /** Logs a message to the console element */
+        function log(message, type = 'log-info') {
+            const consoleEl = document.getElementById('ring-log');
+            const timestamp = new Date().toLocaleTimeString('en-US', { hour12: false, second: '2-digit', minute: '2-digit' });
+            consoleEl.innerHTML += `[${timestamp}] <span class="${type}">${message}</span>\n`;
+            consoleEl.scrollTop = consoleEl.scrollHeight;
+        }
+        
+        /** Creates the visual packet element */
+        function createPacket(x, y, color) {
+            const packet = document.createElement('div');
+            packet.className = `packet`;
+            packet.style.backgroundColor = color;
+            packet.style.left = `${x - 7.5}px`; // Centered
+            packet.style.top = `${y - 7.5}px`; // Centered
+            return packet;
+        }
+        
+        /** Calculates the center of the arc path between two nodes */
+        function calculateArcCenter(start, end) {
+            const dx = end.x - start.x;
+            const dy = end.y - start.y;
+            // Midpoint of the line segment
+            const midX = start.x + dx / 2;
+            const midY = start.y + dy / 2;
+            
+            // Vector from center to midpoint
+            const cx = midX - CENTER_POS.x;
+            const cy = midY - CENTER_POS.y;
+
+            // Distance from center to midpoint
+            const dist = Math.sqrt(cx * cx + cy * cy);
+            
+            // Distance from midpoint to the arc control point
+            const arcDist = 10; // Controls how much the path bulges
+            
+            // Normalize the vector and extend outward for the control point
+            const controlX = midX + (cx / dist) * arcDist;
+            const controlY = midY + (cy / dist) * arcDist;
+
+            return { midX, midY, controlX, controlY };
+        }
+
+        // --- Core Visualization Setup ---
+
+        /** Clears the visualization container and calculates node positions */
+        function initializeVisualization() {
+            const container = document.getElementById('ring-vis');
+            container.innerHTML = '';
+            
+            const { width, height } = container.getBoundingClientRect();
+            
+            // 1. Calculate Center Position
+            CENTER_POS.x = width / 2;
+            CENTER_POS.y = height / 2;
+
+            // 2. Draw the Ring Path
+            const ringPath = document.createElement('div');
+            ringPath.className = 'ring-path';
+            ringPath.id = 'ring-path';
+            container.appendChild(ringPath);
+            updateFailureVisual();
+
+            // 3. Calculate and draw nodes & links
+            const angleStep = (2 * Math.PI) / NODE_COUNT;
+            
+            NODE_IDS.forEach((id, index) => {
+                // Start at 12 o'clock and go clockwise
+                const angle = index * angleStep - (Math.PI / 2); 
+                
+                // Calculate position on the circle
+                const x = CENTER_POS.x + RING_RADIUS * Math.cos(angle);
+                const y = CENTER_POS.y + RING_RADIUS * Math.sin(angle);
+                
+                nodePositions[id] = { x, y };
+                
+                // Draw Node
+                const node = document.createElement('div');
+                node.className = 'node';
+                node.id = `node-${id}`;
+                node.style.left = `${x - 32.5}px`; // Centered
+                node.style.top = `${y - 32.5}px`; // Centered
+                node.textContent = `Node ${id}`;
+                node.onclick = () => selectNode(id);
+                container.appendChild(node);
+            });
+
+            populateSelects();
+        }
+
+        /** Populates the source and target dropdowns */
+        function populateSelects() {
+            const sourceSelect = document.getElementById('source-select');
+            const targetSelect = document.getElementById('target-select');
+
+            sourceSelect.innerHTML = '';
+            targetSelect.innerHTML = '';
+
+            NODE_IDS.forEach(id => {
+                const sourceOption = new Option(`Node ${id}`, id);
+                const targetOption = new Option(`Node ${id}`, id);
+                sourceSelect.add(sourceOption);
+                targetSelect.add(targetOption);
+            });
+
+            // Set default selections
+            sourceSelect.value = 'A';
+            targetSelect.value = 'D';
+            updateSelectedNodes();
+            
+            // Add change listeners
+            sourceSelect.onchange = updateSelectedNodes;
+            targetSelect.onchange = updateSelectedNodes;
+        }
+
+        /** Updates the visual style of the selected nodes */
+        function updateSelectedNodes() {
+            const sourceId = document.getElementById('source-select').value;
+            const targetId = document.getElementById('target-select').value;
+
+            document.querySelectorAll('.node').forEach(node => {
+                node.style.borderColor = 'transparent';
+                node.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.3)';
+            });
+
+            const sourceEl = document.getElementById(`node-${sourceId}`);
+            if (sourceEl) {
+                sourceEl.style.borderColor = '#f97316'; // Orange
+                sourceEl.style.boxShadow = '0 0 10px #f97316';
+            }
+            
+            const targetEl = document.getElementById(`node-${targetId}`);
+            if (targetEl) {
+                targetEl.style.borderColor = '#059669'; // Green
+                targetEl.style.boxShadow = '0 0 10px #059669';
+            }
+        }
+        
+        /** Allows clicking a node to set it as source */
+        function selectNode(id) {
+            const sourceSelect = document.getElementById('source-select');
+            sourceSelect.value = id;
+            updateSelectedNodes();
+        }
+
+        /** Updates the visual state of the ring based on failure status */
+        function updateFailureVisual() {
+            const ringPath = document.getElementById('ring-path');
+            const failBtn = document.getElementById('fail-btn');
+            if (isLinkFailed) {
+                ringPath.classList.add('broken-link');
+                failBtn.textContent = 'Restore Link';
+                failBtn.classList.replace('bg-red-600', 'bg-green-600');
+                failBtn.classList.replace('hover:bg-red-700', 'hover:bg-green-700');
+            } else {
+                ringPath.classList.remove('broken-link');
+                failBtn.textContent = 'Simulate Link Failure';
+                failBtn.classList.replace('bg-green-600', 'bg-red-600');
+                failBtn.classList.replace('hover:bg-green-700', 'hover:bg-red-700');
+            }
+        }
+
+        /** Toggles the link failure state */
+        function toggleLinkFailure() {
+            isLinkFailed = !isLinkFailed;
+            updateFailureVisual();
+            if (isLinkFailed) {
+                log('CRITICAL ERROR: A link (e.g., Node F to Node A) has failed. The ring is broken, and all communication ceases.', 'log-fail');
+            } else {
+                log('Link restored. Network functionality returned.', 'log-info');
+            }
+        }
+
+        /** Simulates the data transmission process */
+        async function simulateTransmission() {
+            if (animationLocked) return;
+            
+            const sourceId = document.getElementById('source-select').value;
+            const targetId = document.getElementById('target-select').value;
+            
+            if (sourceId === targetId) {
+                log(`ERROR: Source and Target nodes must be different.`, 'log-fail');
+                return;
+            }
+            if (isLinkFailed) {
+                 log(`ATTEMPT FAILED: The ring is broken due to a link failure. Transmission aborted.`, 'log-fail');
+                 return;
+            }
+
+            animationLocked = true;
+            document.querySelectorAll('button').forEach(btn => btn.disabled = true);
+            document.getElementById(`node-${sourceId}`).style.transform = 'scale(1.1)';
+            
+            log('-------------------------------------------', 'log-info');
+            log(`START: Node ${sourceId} sends a frame intended for Node ${targetId}.`, 'log-send');
+
+            const p = createPacket(nodePositions[sourceId].x, nodePositions[sourceId].y, '#f97316');
+            document.getElementById('ring-vis').appendChild(p);
+            
+            // Determine the path (clockwise)
+            const path = [];
+            let currentNodeIndex = NODE_IDS.indexOf(sourceId);
+            let targetNodeIndex = NODE_IDS.indexOf(targetId);
+
+            // Add all nodes, starting from source, until the target is passed (to complete the loop)
+            for (let i = 0; i < NODE_COUNT; i++) {
+                const nextIndex = (currentNodeIndex + i) % NODE_COUNT;
+                path.push(NODE_IDS[nextIndex]);
+            }
+            
+            // The path goes from Node A to Node B, then B to C, etc., eventually back to A
+            
+            for (let i = 0; i < path.length; i++) {
+                const currentId = path[i];
+                const nextId = path[(i + 1) % path.length];
+                
+                const isSource = currentId === sourceId;
+                const isTarget = currentId === targetId;
+                const isReturnToSource = currentId === targetId && nextId === sourceId;
+                const isIntermediary = !isSource && !isTarget;
+                
+                const startPos = nodePositions[currentId];
+                const endPos = nodePositions[nextId];
+                
+                // 1. Move packet to next node (or around the ring back to source)
+                await movePacket(p, startPos, endPos, MOVEMENT_SPEED_MS);
+                
+                const currentEl = document.getElementById(`node-${currentId}`);
+                currentEl.style.transform = 'scale(1.1)';
+
+
+                // 2. Node inspection/action
+                if (isSource && i === 0) {
+                    // Source node has already sent it, nothing to do here
+                    log(`Frame leaves Node ${sourceId} and travels to Node ${nextId}.`, 'log-send');
+                } else if (isTarget) {
+                    // Target Node: Copies data and marks the frame as 'read'
+                    log(`Node ${currentId} is the destination! Node ${currentId} copies the data and modifies the frame status bit.`, 'log-accept');
+                    p.style.backgroundColor = '#34d399'; // Green to signify 'read/modified'
+                    await sleep(500);
+                    currentEl.style.transform = 'scale(1.0)';
+                    
+                    if (i < path.length - 1) {
+                         // Frame continues back to source for removal
+                        log(`Modified frame continues its travel back to the Source Node (${sourceId}) for removal.`, 'log-accept');
+                    }
+                } else if (currentId === sourceId && i > 0) {
+                    // Source Node: Receives its own read/modified frame and strips it
+                    log(`Node ${currentId} receives its modified frame and STRIPS it from the network.`, 'log-accept');
+                    p.remove();
+                    currentEl.style.transform = 'scale(1.0)';
+                    break; // End transmission
+                } else {
+                    // Intermediate Node: Inspects the address and forwards the frame
+                    log(`Node ${currentId} receives frame, sees it is NOT the destination, and FORWARDS it.`, 'log-inspect');
+                    await sleep(300);
+                    currentEl.style.transform = 'scale(1.0)';
+                }
+                
+                currentEl.style.transform = 'scale(1.0)';
+            }
+
+            // 3. Cleanup and unlock
+            setTimeout(() => {
+                document.getElementById(`node-${sourceId}`).style.transform = 'scale(1.0)';
+                
+                log(`END: Transmission cycle complete.`, 'log-info');
+                animationLocked = false;
+                document.querySelectorAll('button').forEach(btn => btn.disabled = false);
+            }, 500);
+        }
+
+        /** Pauses execution for a duration */
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        /** Animates a packet from one node position to the next */
+        function movePacket(element, startPos, endPos, duration) {
+            return new Promise(resolve => {
+                const totalSteps = 60; // For smooth animation
+                let currentStep = 0;
+                
+                const dx = endPos.x - startPos.x;
+                const dy = endPos.y - startPos.y;
+                
+                const offsetX = -7.5; // Centering adjustment
+                const offsetY = -7.5; 
+
+                element.style.transition = 'none';
+
+                function animate() {
+                    if (currentStep >= totalSteps) {
+                        element.style.left = `${endPos.x + offsetX}px`;
+                        element.style.top = `${endPos.y + offsetY}px`;
+                        return resolve();
+                    }
+                    
+                    currentStep++;
+                    const progress = currentStep / totalSteps;
+                    
+                    const currentX = startPos.x + dx * progress;
+                    const currentY = startPos.y + dy * progress;
+
+                    element.style.left = `${currentX + offsetX}px`;
+                    element.style.top = `${currentY + offsetY}px`;
+
+                    requestAnimationFrame(animate);
+                }
+
+                animate();
+            });
+        }
+
+        // --- Event Listeners and Initial Setup ---
+        
+        window.addEventListener('load', initializeVisualization);
+        window.addEventListener('resize', initializeVisualization);
+    </script>
+</body>
+</html>

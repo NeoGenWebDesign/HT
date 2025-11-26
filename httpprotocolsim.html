@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HTTP Request-Response Cycle Simulator</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Consolas', 'Courier New', monospace;
+            background: linear-gradient(180deg, #353636 50%, #032a36 75%);
+            min-height: 100vh;
+        }
+        a {
+            display: block;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            text-align: center;
+        }
+        .container-card {
+            background-color: rgb(163, 162, 162);
+            border-radius: 1.5rem;
+            box-shadow: 0 15px 30px -5px rgba(0, 0, 0, 0.1), 0 5px 15px -5px rgba(0, 0, 0, 0.04);
+            padding: 1rem;
+        }
+        .vis-area {
+            position: relative;
+            height: 350px;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        /* Device Styling (Client & Server) */
+        .device {
+            width: 150px;
+            height: 150px;
+            background-color: #3b82f6; /* Blue */
+            border-radius: 0.75rem;
+            color: rgb(255, 255, 255);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            box-shadow: 0 5px 10px rgba(0, 0, 0, 0.2);
+            transition: transform 0.3s;
+            z-index: 10;
+            position: relative;
+        }
+        .device-label {
+            position: absolute;
+            top: -2.5rem;
+            font-size: 0.70rem;
+            color: #ffffff;
+            padding-top: 100px;
+        }
+        .server { background-color: #10b981; /* Green */ }
+
+        /* Request/Response Frame Animation */
+        .http-frame {
+            position: absolute;
+            width: 60px;
+            height: 30px;
+            border-radius: 0.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            font-weight: bold;
+            color: white;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+            z-index: 20;
+            opacity: 0;
+            transition: opacity 0.1s;
+        }
+        .request-frame {
+            background-color: #ef4444; /* Red */
+            left: 150px; /* Start near client */
+            transform: translateX(-50%);
+        }
+        .response-frame {
+            background-color: #f97316; /* Orange */
+            right: 150px; /* Start near server */
+            transform: translateX(50%);
+        }
+
+        /* Network Link */
+        .network-link {
+            position: absolute;
+            left: 150px;
+            right: 150px;
+            height: 4px;
+            background-color: #9ca3af; /* Gray */
+            border-radius: 2px;
+            transition: background-color 0.5s;
+        }
+        .link-active { background-color: #4f46e5; } /* Violet for active connection */
+
+        /* Log Styling */
+        .console-log {
+            min-height: 150px;
+            max-height: 250px;
+            background-color: #1f2937;
+            color: #e5e7eb;
+            font-family: 'Consolas', 'Courier New', monospace;
+            border-radius: 0.75rem;
+            padding: 1rem;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            font-size: 0.85rem;
+        }
+        .log-request { color: #f87171; } /* Red for Request */
+        .log-response { color: #fb923c; } /* Orange for Response */
+        .log-status { color: #34d399; } /* Green for Status */
+        .log-header { color: #60a5fa; } /* Blue for Headers */
+        .log-body { color: #e5e7eb; } /* Light Gray for Body */
+    </style>
+</head>
+<body class="p-4 md:p-10 min-h-screen">
+
+    <div class="max-w-5xl mx-auto">
+        <h1 class="text-3xl font-extrabold text-orange-500 mb-6 text-center">
+            HTTP Simulation: The Request-Response Cycle
+        </h1>
+         <p class="text-sm text-yellow-500 mb-8 text-center">
+            Press F5 or Reload/Refresh Browser to Reset Simulation.
+        </p>
+        <a id="link" class="text-sm hover:text-lime-500 text-yellow-200 mb-8 text-center" href="index.html">
+            Back to Simulations Index
+        </a>
+
+        <div class="container-card">
+
+            <!-- Visualization Area -->
+            <div id="vis-area" class="vis-area">
+                <div class="device-container flex flex-col items-center">
+                    <div class="device-label">Client (Browser)</div>
+                    <div id="client" class="device text-center">
+                        <svg class="w-10 h-10 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1v-3m-6.447-4.106A4 4 0 0113.882 10h.236a4 4 0 014.288 3.013M9.75 17l-1-1h6.5l-1 1M18.882 14.106A4 4 0 0013.882 10m0 0a4 4 0 00-4.088 4.106M12 21a9 9 0 100-18 9 9 0 000 18z"></path></svg>
+                        CLIENT IP: 192.168.1.10
+                    </div>
+                </div>
+
+                <div id="link" class="network-link absolute self-center"></div>
+
+                <div class="device-container flex flex-col items-center">
+                    <div class="device-label">Server (Web Host)</div>
+                    <div id="server" class="device server text-center">
+                        <svg class="w-10 h-10 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 002 2h10a2 2 0 002-2M5 12a2 2 0 012-2h10a2 2 0 012 2m-2 7H7a2 2 0 01-2-2v-4a2 2 0 012-2h10a2 2 0 012 2v4a2 2 0 01-2 2z"></path></svg>
+                        SERVER IP: 203.0.113.5
+                    </div>
+                </div>
+
+                <div id="request-frame" class="http-frame request-frame">GET</div>
+                <div id="response-frame" class="http-frame response-frame">200 OK</div>
+            </div>
+
+            <!-- Controls and Explanations -->
+            <div class="flex justify-center space-x-4 mb-6">
+                <select id="scenario-select" class="bg-white border border-gray-300 rounded-lg p-3 text-sm shadow-md">
+                    <option value="get">Scenario 1: GET (Fetching a Page)</option>
+                    <option value="post">Scenario 2: POST (Submitting a Form)</option>
+                    <option value="404">Scenario 3: 404 Error (Resource Not Found)</option>
+                </select>
+                <button onclick="startSimulation()" id="start-btn"
+                        class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg shadow-xl transition duration-150 text-sm disabled:opacity-50">
+                    Run HTTP Cycle
+                </button>
+                <button onclick="resetSimulation()" id="reset-btn" disabled
+                        class="bg-gray-900 hover:bg-emerald-500 text-white font-bold py-3 px-6 rounded-lg shadow-xl transition duration-150 text-sm disabled:opacity-50">
+                    Reset
+                </button>
+            </div>
+
+            <h3 class="text-xl font-semibold text-gray-800 mb-3">HTTP Message Breakdown</h3>
+            <div id="sim-log" class="console-log">
+                <p class="log-status">// Use the dropdown to select an HTTP scenario and click 'Run HTTP Cycle'.</p>
+                <p class="log-status">// This demonstrates the request (Client to Server) and response (Server to Client) structure.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Configuration and State ---
+        let isRunning = false;
+        let animationDuration = 3000; // Total time for one full cycle (Request + Response)
+        const clientX = 150;
+        const serverX = document.getElementById('vis-area').offsetWidth - 150;
+
+        const SCENARIOS = {
+            get: {
+                request: {
+                    method: 'GET',
+                    url: '/index.html',
+                    headers: [
+                        'Host: example.com',
+                        'User-Agent: Mozilla/5.0 (Sim)',
+                        'Accept: text/html, application/xhtml+xml',
+                        'Accept-Language: en-US',
+                        'Connection: keep-alive'
+                    ],
+                    body: null,
+                    description: 'The client requests the homepage file (/index.html).'
+                },
+                response: {
+                    status: '200 OK',
+                    headers: [
+                        'Date: Mon, 24 Nov 2025 09:00:00 GMT',
+                        'Server: Apache/2.4.1 (Unix)',
+                        'Content-Type: text/html; charset=UTF-8',
+                        'Content-Length: 4500'
+                    ],
+                    body: '<h1>Welcome!</h1><p>HTTP is stateless.</p>',
+                    description: 'The server successfully returns the requested HTML content.'
+                }
+            },
+            post: {
+                request: {
+                    method: 'POST',
+                    url: '/api/login',
+                    headers: [
+                        'Host: example.com',
+                        'Content-Type: application/x-www-form-urlencoded',
+                        'Content-Length: 35'
+                    ],
+                    body: 'username=instructor&password=secure123',
+                    description: 'The client sends data (a login form submission) to the server.'
+                },
+                response: {
+                    status: '201 Created',
+                    headers: [
+                        'Location: /dashboard',
+                        'Set-Cookie: sessionID=xyz123; HttpOnly',
+                        'Content-Length: 0'
+                    ],
+                    body: null,
+                    description: 'The server successfully processed the POST and may redirect the client (201 or 302 status often follows a POST).'
+                }
+            },
+            '404': {
+                request: {
+                    method: 'GET',
+                    url: '/missing_resource.jpg',
+                    headers: [
+                        'Host: example.com',
+                        'User-Agent: Simulated Client'
+                    ],
+                    body: null,
+                    description: 'The client requests a file that does not exist on the server.'
+                },
+                response: {
+                    status: '404 Not Found',
+                    headers: [
+                        'Date: Mon, 24 Nov 2025 09:00:00 GMT',
+                        'Content-Type: text/html; charset=UTF-8'
+                    ],
+                    body: '<h2>Error 404</h2><p>Resource not found.</p>',
+                    description: 'The server informs the client that the requested resource could not be found.'
+                }
+            }
+        };
+
+        const elements = {
+            link: document.getElementById('link'),
+            reqFrame: document.getElementById('request-frame'),
+            resFrame: document.getElementById('response-frame'),
+            log: document.getElementById('sim-log'),
+            startBtn: document.getElementById('start-btn'),
+            resetBtn: document.getElementById('reset-btn'),
+            select: document.getElementById('scenario-select')
+        };
+
+        // --- Utility Functions ---
+
+        function log(message, type = 'log-status') {
+            elements.log.innerHTML += `<span class="${type}">${message}</span>\n`;
+            elements.log.scrollTop = elements.log.scrollHeight;
+        }
+
+        function clearLog() {
+            elements.log.innerHTML = '';
+        }
+
+        // --- Simulation Functions ---
+
+        function animateFrame(frameEl, startX, endX, duration, callback) {
+            frameEl.style.transition = `transform ${duration}ms linear, opacity 100ms`;
+            frameEl.style.opacity = '1';
+
+            // Start position (uses transform for smooth movement)
+            frameEl.style.transform = `translateX(${startX - (frameEl.offsetWidth / 2)}px)`;
+
+            // Trigger reflow/repaint to ensure start position is rendered
+            void frameEl.offsetWidth;
+
+            // End position
+            frameEl.style.transform = `translateX(${endX - (frameEl.offsetWidth / 2)}px)`;
+
+            setTimeout(() => {
+                frameEl.style.opacity = '0';
+                frameEl.style.transition = 'none'; // Reset transition for next run
+                if (callback) callback();
+            }, duration);
+        }
+
+        function displayMessage(message, type) {
+            let content = '';
+
+            // 1. Start/Status Line
+            if (type === 'request') {
+                content += `<span class="log-request">${message.method} ${message.url} HTTP/1.1</span>\n`;
+            } else {
+                content += `<span class="log-response">HTTP/1.1 ${message.status}</span>\n`;
+            }
+
+            // 2. Headers
+            message.headers.forEach(header => {
+                content += `<span class="log-header">${header}</span>\n`;
+            });
+            content += '\n'; // Blank line separating headers and body
+
+            // 3. Body
+            if (message.body) {
+                content += `<span class="log-body">${message.body.substring(0, 80)}${message.body.length > 80 ? '...' : ''}</span>\n`;
+            }
+
+            log(content, type === 'request' ? 'log-request' : 'log-response');
+        }
+
+        function startSimulation() {
+            if (isRunning) return;
+            isRunning = true;
+            clearLog();
+            
+            elements.link.classList.add('link-active');
+            elements.startBtn.disabled = true;
+            elements.resetBtn.disabled = false;
+            elements.startBtn.textContent = 'In Progress...';
+
+            const scenarioKey = elements.select.value;
+            const scenario = SCENARIOS[scenarioKey];
+
+            // 1. Initial Log
+            log(`--- Starting Simulation: ${scenario.request.method} Request ---`, 'log-status');
+            log(`Client Action: ${scenario.request.description}`, 'log-status');
+
+            // 2. HTTP Request Cycle
+            setTimeout(() => {
+                log('Client sends Request message:', 'log-request');
+                displayMessage(scenario.request, 'request');
+                elements.reqFrame.textContent = scenario.request.method;
+                
+                // Animate Request: Client (left) to Server (right)
+                animateFrame(elements.reqFrame, clientX, serverX, animationDuration / 2, () => {
+                    // Request arrived at server
+                    elements.link.classList.remove('link-active');
+                    elements.link.classList.add('server-processing');
+                    log('Server received Request. Processing...', 'log-status');
+
+                    // 3. HTTP Response Cycle (After a small delay for processing)
+                    setTimeout(() => {
+                        elements.link.classList.add('link-active');
+                        elements.link.classList.remove('server-processing');
+                        log(`Server sends Response message: Status ${scenario.response.status}`, 'log-response');
+                        displayMessage(scenario.response, 'response');
+                        elements.resFrame.textContent = scenario.response.status.split(' ')[0];
+                        
+                        // Animate Response: Server (right) to Client (left)
+                        animateFrame(elements.resFrame, serverX, clientX, animationDuration / 2, () => {
+                            // Response arrived at client
+                            elements.link.classList.remove('link-active');
+                            log(`Client received Response. Rendering content...`, 'log-status');
+                            log('--- Simulation Complete ---', 'log-status');
+                            stopSimulation();
+                        });
+                    }, 500); // Server processing delay
+                });
+            }, 100);
+        }
+
+        function stopSimulation() {
+            isRunning = false;
+            elements.startBtn.disabled = false;
+            elements.startBtn.textContent = 'Run HTTP Cycle';
+            elements.link.classList.remove('link-active');
+        }
+
+        function resetSimulation() {
+            if (isRunning) {
+                // If running, just stop the timers/animations if possible (basic implementation here)
+                stopSimulation();
+            }
+            clearLog();
+            elements.log.innerHTML = `<p class="log-status">// Use the dropdown to select an HTTP scenario and click 'Run HTTP Cycle'.</p>
+                <p class="log-status">// This demonstrates the request (Client to Server) and response (Server to Client) structure.</p>`;
+            elements.resetBtn.disabled = true;
+        }
+
+        // Set initial frame positions for the animation to work correctly
+        window.onload = () => {
+             // Set the initial left/right transforms dynamically based on computed width
+            const visWidth = document.getElementById('vis-area').offsetWidth;
+            const clientTargetX = 0; // Relative to its parent
+            const serverTargetX = visWidth; // Relative to its parent
+
+            // Initial position outside the main device area
+            elements.reqFrame.style.transform = `translateX(${clientTargetX - 100}px)`; 
+            elements.resFrame.style.transform = `translateX(${serverTargetX + 100}px)`;
+
+            // Setup listeners
+            document.getElementById('vis-area').style.justifyContent = 'space-between'; // Ensure proper layout for positioning
+        };
+        
+        // Handle window resize to keep frames positioned correctly (Tailwind handles devices)
+        window.onresize = () => {
+            // Re-calculate positions on resize if the layout changes significantly
+            // (Tailwind generally handles the device positions, so we mainly need to ensure the animation state is clean)
+            resetSimulation();
+        };
+
+    </script>
+</body>
+</html>

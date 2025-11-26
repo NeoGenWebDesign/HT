@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Compression Simulator (RLE)</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Consolas', 'Courier New', monospace;
+            background: linear-gradient(180deg, #353636 50%, #032a36 75%);
+            min-height: 100vh;
+        }
+        a {
+            display: block;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            text-align: center;
+        }
+        .card {
+            background-color: rgb(170, 169, 169);
+            border-radius: 0.75rem;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+            color: #0c0c0c;
+        }
+        .data-box {
+            min-height: 150px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+            font-family: monospace;
+        }
+        .header-section {
+            border-top-left-radius: 0.75rem;
+            border-top-right-radius: 0.75rem;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-10 min-h-screen">
+
+    <div class="max-w-7xl mx-auto">
+        <h1 class="text-3xl font-extrabold text-orange-500 mb-2 text-center">
+            Data Compression Concept Simulator
+        </h1>
+        <p class="text-lg text-white mb-6 text-center font-bold">
+            Demonstrating Run-Length Encoding (RLE).
+        </p>
+        <p class="text-sm text-yellow-500 mb-8 text-center">
+            Press F5 or Reload/Refresh Browser to Reset Simulation.
+        </p>
+        <a id="link" class="text-sm hover:text-lime-500 text-yellow-200 mb-8 text-center" href="index.html">
+            Back to Simulations Index
+        </a>
+
+        <!-- Explanation Section -->
+        <div class="card p-5 mb-8 bg-yellow-50 border-l-4 border-red-300">
+            <h2 class="text-xl font-bold text-red-700 mb-2">
+                Concept: Run-Length Encoding (RLE)
+            </h2>
+            <p class="text-gray-700 leading-relaxed text-sm">
+                RLE is a simple, **lossless** compression technique that works by replacing long **runs** of identical data (like consecutive characters) with a **count** and the **value**. For example, the sequence `AAAAABBC` is compressed into `5A2B1C`. It's most effective on data with many repeating sequences (e.g., simple images or flat-colored areas).
+            </p>
+        </div>
+
+        <!-- Main Simulation Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+            <!-- 1. Original Data Input -->
+            <div class="card lg:col-span-1">
+                <div class="header-section bg-yellow-600 p-4 text-white">
+                    <h3 class="text-xl font-semibold">1. Original Source Data</h3>
+                </div>
+                <div class="p-4">
+                    <textarea id="original-input" class="w-full p-3 border border-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 data-box resize-none" placeholder="Enter text with repeating characters for best results (e.g., AAAAAABBBCCCCC)...">AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBBBCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC</textarea>
+                    <p class="text-sm mt-2 text-gray-500">Original Size: <span id="original-size">0</span> characters</p>
+                </div>
+            </div>
+
+            <!-- 2. Compression/Decompression Controls -->
+            <div class="lg:col-span-1 flex flex-col justify-center space-y-4 p-4">
+                <button onclick="compressData()" class="bg-green-600 hover:bg-gray-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-150 transform hover:scale-105">
+                    <span class="text-lg">Compress Data ↓</span>
+                </button>
+                <button onclick="decompressData()" class="bg-red-500 hover:bg-gray-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-150 transform hover:scale-105">
+                    <span class="text-lg">Decompress Data ↑</span>
+                </button>
+            </div>
+
+            <!-- 3. Compressed Data Output -->
+            <div class="card lg:col-span-1">
+                <div class="header-section bg-lime-600 p-4 text-white border border-gray-900">
+                    <h3 class="text-xl font-semibold">3. Compressed Result</h3>
+                </div>
+                <div class="p-4">
+                    <code id="compressed-output" class="block bg-gray-100 p-3 rounded-lg data-box text-sm text-gray-800">
+                        Compressed data will appear here (e.g., 5A2B1C)
+                    </code>
+                    <p class="text-sm mt-2 text-gray-500">Compressed Size: <span id="compressed-size">0</span> characters</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Metrics and Comparison -->
+        <div class="card mt-8 p-6 bg-white shadow-xl">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Compression Metrics</h2>
+            <div class="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0 md:space-x-6">
+                
+                <div class="bg-blue-100 p-4 rounded-lg flex-1 w-full text-center">
+                    <p class="text-sm text-blue-700 font-medium">Original Length (L1)</p>
+                    <p id="metric-original" class="text-3xl font-extrabold text-blue-900">0</p>
+                </div>
+
+                <div class="bg-indigo-100 p-4 rounded-lg flex-1 w-full text-center">
+                    <p class="text-sm text-indigo-700 font-medium">Compressed Length (L2)</p>
+                    <p id="metric-compressed" class="text-3xl font-extrabold text-indigo-900">0</p>
+                </div>
+
+                <div class="bg-green-100 p-4 rounded-lg flex-1 w-full text-center">
+                    <p class="text-sm text-green-700 font-medium">Data Reduction</p>
+                    <p id="metric-reduction" class="text-3xl font-extrabold text-green-800">0.00%</p>
+                </div>
+
+                <div class="bg-yellow-100 p-4 rounded-lg flex-1 w-full text-center">
+                    <p class="text-sm text-yellow-700 font-medium">Expansion/Ratio</p>
+                    <p id="metric-ratio" class="text-3xl font-extrabold text-yellow-900">1.00</p>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Update size metrics whenever the input changes
+            const input = document.getElementById('original-input');
+            input.addEventListener('input', () => {
+                document.getElementById('original-size').textContent = input.value.length;
+                document.getElementById('metric-original').textContent = input.value.length;
+                updateMetrics(0, input.value.length);
+            });
+            // Initial call to set up the default text and size
+            input.dispatchEvent(new Event('input'));
+        });
+        
+        // --- Core RLE Functions ---
+
+        /**
+         * Compresses the input text using Run-Length Encoding.
+         * @param {string} input - The original string.
+         * @returns {string} The compressed RLE string (e.g., "5A2B1C").
+         */
+        function compressRLE(input) {
+            if (!input) return "";
+
+            let output = "";
+            let count = 1;
+            let current = input[0];
+
+            for (let i = 1; i < input.length; i++) {
+                if (input[i] === current) {
+                    count++;
+                } else {
+                    output += count + current;
+                    current = input[i];
+                    count = 1;
+                }
+            }
+            // Append the last run
+            output += count + current;
+            return output;
+        }
+
+        /**
+         * Decompresses an RLE string back to its original form.
+         * @param {string} rle_input - The compressed RLE string (e.g., "5A2B1C").
+         * @returns {string} The decompressed original string.
+         */
+        function decompressRLE(rle_input) {
+            if (!rle_input) return "";
+
+            let output = "";
+            let countStr = "";
+            
+            for (const char of rle_input) {
+                // Check if the character is a digit
+                if (!isNaN(parseInt(char))) {
+                    countStr += char;
+                } else {
+                    // It's the character to repeat
+                    const count = parseInt(countStr);
+                    if (!isNaN(count)) {
+                        output += char.repeat(count);
+                    }
+                    countStr = ""; // Reset count string
+                }
+            }
+            return output;
+        }
+
+        // --- UI Logic and Metrics ---
+
+        /**
+         * Updates the metrics section based on original and compressed lengths.
+         * @param {number} compressedLength 
+         * @param {number} originalLength 
+         */
+        function updateMetrics(compressedLength, originalLength) {
+            const original = originalLength || 0;
+            const compressed = compressedLength || 0;
+
+            document.getElementById('metric-original').textContent = original;
+            document.getElementById('metric-compressed').textContent = compressed;
+            document.getElementById('compressed-size').textContent = compressed;
+            
+            if (original > 0) {
+                const reduction = original >= compressed ? ((original - compressed) / original) * 100 : 0;
+                const ratio = compressed > 0 ? (original / compressed) : 0;
+
+                document.getElementById('metric-reduction').textContent = `${reduction.toFixed(2)}%`;
+                document.getElementById('metric-ratio').textContent = ratio.toFixed(2);
+
+                // Highlight if compression was successful (reduction > 0)
+                const reductionElement = document.getElementById('metric-reduction').parentElement;
+                if (reduction > 0) {
+                    reductionElement.classList.remove('bg-yellow-100');
+                    reductionElement.classList.add('bg-green-100');
+                } else {
+                    reductionElement.classList.remove('bg-green-100');
+                    reductionElement.classList.add('bg-yellow-100');
+                }
+
+            } else {
+                document.getElementById('metric-reduction').textContent = "0.00%";
+                document.getElementById('metric-ratio').textContent = "1.00";
+            }
+        }
+
+        /**
+         * Compresses the data from the input box and displays the result.
+         */
+        function compressData() {
+            const originalInput = document.getElementById('original-input').value;
+            const compressedOutput = document.getElementById('compressed-output');
+            
+            if (originalInput.trim() === "") {
+                compressedOutput.textContent = "Error: Please enter data to compress.";
+                updateMetrics(0, 0);
+                return;
+            }
+
+            const compressedText = compressRLE(originalInput);
+            
+            compressedOutput.textContent = compressedText;
+            
+            updateMetrics(compressedText.length, originalInput.length);
+        }
+
+        /**
+         * Decompresses the data from the output box and displays it back in the input.
+         */
+        function decompressData() {
+            const compressedInput = document.getElementById('compressed-output').textContent;
+            const originalInputArea = document.getElementById('original-input');
+            
+            if (compressedInput.trim() === "" || compressedInput.includes("will appear here")) {
+                originalInputArea.value = "Error: Please compress data first.";
+                return;
+            }
+
+            const decompressedText = decompressRLE(compressedInput);
+
+            // Update the original input area with the decompressed data
+            originalInputArea.value = decompressedText;
+
+            // Trigger input event to update original size metric
+            originalInputArea.dispatchEvent(new Event('input'));
+
+            // Reset compressed metrics (optional, but shows the end state)
+            document.getElementById('compressed-output').textContent = "Decompressed data moved back to source area.";
+            updateMetrics(0, decompressedText.length);
+        }
+    </script>
+</body>
+</html>

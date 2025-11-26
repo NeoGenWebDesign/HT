@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DHCP DORA Simulation</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Consolas', 'Courier New', monospace;
+            background: linear-gradient(180deg, #353636 50%, #032a36 75%);
+            min-height: 100vh;
+        }
+        a {
+            display: block;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            text-align: center;
+        }
+        .card {
+            background-color: rgb(189, 188, 188);
+            border-radius: 1rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.06);
+            padding: 1.5rem;
+            border-top: 5px solid;
+        }
+        .log-container {
+            height: 300px;
+            overflow-y: auto;
+            background-color: #1f2937; /* Dark Gray for console look */
+            color: #d1d5db; /* Light text */
+            font-family: 'Consolas', 'Courier New', monospace;
+            border-radius: 0.5rem;
+            padding: 0.75rem;
+            font-size: 0.9rem;
+        }
+        .message-client { color: #f63bbe; /* Blue 500 */ }
+        .message-server { color: #26f1ae; /* Green 500 */ }
+        .message-system { color: #04f739; /* Yellow 500 */ }
+    </style>
+</head>
+<body class="p-4 md:p-10 min-h-screen">
+
+    <div class="max-w-6xl mx-auto">
+        <h1 class="text-4xl font-extrabold text-orange-500 mb-2 text-center">
+            DHCP DORA Process Simulator
+        </h1>
+        <p class="text-lg text-white mb-8 text-center">
+            Watch how a client leases an IP address using the four-step <strong class="text-teal-400">**DORA**</strong> <strong>(Discover, Offer, Request and Acknowledge)</strong> sequence.
+        </p>
+        <p class="text-sm text-yellow-500 mb-8 text-center">
+            Press F5 or Reload/Refresh Browser to Reset Simulation.
+        </p>
+        <a id="link" class="text-sm hover:text-lime-500 text-yellow-200 mb-8 text-center" href="index.html">
+            Back to Simulations Index
+        </a>
+
+        <!-- Informational Section -->
+        <div class="bg-gradient-to-t from-gray-500 to-gray-700 p-4 rounded-lg mb-8 border-l-4 border-teal-500">
+            <h2 class="text-2xl font-semibold text-white mb-2">What is DHCP?</h2>
+            <p class="text-orange-400 font-semibold">The **Dynamic Host Configuration Protocol (DHCP)** automates the assignment of IP addresses and other network parameters (like Subnet Mask, Gateway, and DNS servers) to devices on a network. This prevents manual configuration errors and IP address conflicts.</p>
+            
+        </div>
+
+        <!-- Main Simulation Area -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+            <!-- Client Panel -->
+            <div id="client-card" class="card border-blue-600 lg:col-span-1">
+                <h3 class="text-2xl font-bold text-blue-800 mb-4">Client PC</h3>
+                <div id="client-info" class="space-y-2 text-sm">
+                    <p><strong>MAC Address:</strong> <span id="client-mac" class="font-mono text-gray-600">Generating...</span></p>
+                    <p><strong>Current IP:</strong> <span id="client-ip" class="font-mono text-red-600 font-bold">0.0.0.0 (Unconfigured)</span></p>
+                    <p><strong>Subnet Mask:</strong> <span id="client-subnet" class="font-mono text-gray-600">N/A</span></p>
+                    <p><strong>Default Gateway:</strong> <span id="client-gateway" class="font-mono text-gray-600">N/A</span></p>
+                    <p><strong>Lease Time:</strong> <span id="client-lease" class="font-mono text-gray-600">N/A</span></p>
+                </div>
+                
+                <button id="start-button" onclick="startDHCP()" class="w-full mt-6 bg-lime-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg shadow-md transition duration-150">
+                    Start DHCP Process (Request IP)
+                </button>
+            </div>
+
+            <!-- Network Log Panel -->
+            <div class="card border-gray-400 lg:col-span-2">
+                <h3 class="text-2xl font-bold text-gray-800 mb-4">Network Log (DORA Steps)</h3>
+                <div id="log" class="log-container">
+                    <p class="message-system">System: Click 'Start DHCP Process' to begin the simulation.</p>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Server Configuration Example -->
+        <div class="mt-8">
+            <h3 class="text-2xl font-bold text-orange-400 mb-3">DHCP Server Pool (Simulated)</h3>
+            <div class="bg-gray-200 p-4 rounded-lg grid grid-cols-2 md:grid-cols-4 gap-4 text-sm font-mono">
+                <div><p class="font-bold text-green-700">IP Pool Start:</p> 192.168.1.100</div>
+                <div><p class="font-bold text-green-700">IP Pool End:</p> 192.168.1.200</div>
+                <div><p class="font-bold text-green-700">Subnet Mask:</p> 255.255.255.0</div>
+                <div><p class="font-bold text-green-700">Gateway:</p> 192.168.1.1</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- DHCP Simulation Setup ---
+
+        // Server-side simulated configuration
+        const serverConfig = {
+            ipPoolStart: 100,
+            ipPoolEnd: 200,
+            networkPrefix: '192.168.1.',
+            subnetMask: '255.255.255.0',
+            defaultGateway: '192.168.1.1',
+            dnsServer: '8.8.8.8',
+            leaseTime: '8 Hours'
+        };
+
+        // Client-side state
+        let client = {
+            mac: generateRandomMac(),
+            ip: '0.0.0.0',
+            assignedConfig: null,
+            isProcessing: false
+        };
+
+        // Simulated IP tracking (simplistic, just issues the first available IP)
+        let nextAvailableIP = serverConfig.ipPoolStart;
+
+
+        // --- Utility Functions ---
+
+        function generateRandomMac() {
+            const hex = () => Math.floor(Math.random() * 256).toString(16).padStart(2, '0').toUpperCase();
+            return `${hex()}:${hex()}:${hex()}:${hex()}:${hex()}:${hex()}`;
+        }
+
+        function logMessage(sender, message) {
+            const log = document.getElementById('log');
+            const typeClass = sender === 'CLIENT' ? 'message-client' : sender === 'SERVER' ? 'message-server' : 'message-system';
+            const prefix = sender === 'CLIENT' ? 'Client' : sender === 'SERVER' ? 'DHCP Server' : 'System';
+            const logEntry = document.createElement('p');
+            logEntry.innerHTML = `<span class="font-bold">[${prefix}]</span> <span class="${typeClass}">${message}</span>`;
+            log.appendChild(logEntry);
+            log.scrollTop = log.scrollHeight; // Auto-scroll to bottom
+        }
+
+        function updateClientDisplay() {
+            document.getElementById('client-mac').textContent = client.mac;
+            document.getElementById('client-ip').textContent = client.ip;
+            document.getElementById('client-ip').classList.toggle('text-red-600', client.ip === '0.0.0.0');
+            document.getElementById('client-ip').classList.toggle('text-green-600', client.ip !== '0.0.0.0');
+            
+            if (client.assignedConfig) {
+                document.getElementById('client-subnet').textContent = client.assignedConfig.subnetMask;
+                document.getElementById('client-gateway').textContent = client.assignedConfig.defaultGateway;
+                document.getElementById('client-lease').textContent = client.assignedConfig.leaseTime;
+            } else {
+                document.getElementById('client-subnet').textContent = 'N/A';
+                document.getElementById('client-gateway').textContent = 'N/A';
+                document.getElementById('client-lease').textContent = 'N/A';
+            }
+        }
+
+        function resetSimulation() {
+            client.ip = '0.0.0.0';
+            client.assignedConfig = null;
+            client.mac = generateRandomMac(); // Get a new MAC address
+            nextAvailableIP = serverConfig.ipPoolStart;
+            document.getElementById('log').innerHTML = '<p class="message-system">System: Simulation reset. Click to start a new lease process.</p>';
+            updateClientDisplay();
+        }
+
+
+        // --- The DORA Process Simulation ---
+
+        function startDHCP() {
+            if (client.isProcessing) return;
+
+            client.isProcessing = true;
+            document.getElementById('start-button').disabled = true;
+            document.getElementById('start-button').textContent = 'Leasing in Progress...';
+            
+            resetSimulation();
+
+            logMessage('SYSTEM', 'Starting DHCP DORA Process...');
+
+            // Step 1: DISCOVER
+            setTimeout(dhcpDiscover, 1000);
+        }
+
+        function dhcpDiscover() {
+            const message = `DHCP DISCOVER (Broadcast) - Looking for a Server. My MAC: ${client.mac}`;
+            logMessage('CLIENT', message);
+            
+            // Simulation: Server receives the broadcast
+            setTimeout(dhcpOffer, 2000);
+        }
+
+        function dhcpOffer() {
+            // Server selects the next available IP
+            const offeredIP = serverConfig.networkPrefix + nextAvailableIP;
+            nextAvailableIP++; // Reserve it for this client
+
+            const message = `DHCP OFFER (Unicast/Broadcast) - Offering IP ${offeredIP} to MAC ${client.mac}`;
+            logMessage('SERVER', message);
+
+            // Client receives the offer
+            client.offeredIP = offeredIP;
+            setTimeout(dhcpRequest, 2000);
+        }
+
+        function dhcpRequest() {
+            const message = `DHCP REQUEST (Broadcast) - I accept IP ${client.offeredIP}. Please confirm!`;
+            logMessage('CLIENT', message);
+
+            // Simulation: Server sees the request
+            setTimeout(dhcpAcknowledge, 2000);
+        }
+
+        function dhcpAcknowledge() {
+            // Server finalizes the lease and sends the full configuration (ACK)
+            client.assignedConfig = {
+                ip: client.offeredIP,
+                subnetMask: serverConfig.subnetMask,
+                defaultGateway: serverConfig.defaultGateway,
+                dnsServer: serverConfig.dnsServer,
+                leaseTime: serverConfig.leaseTime
+            };
+            client.ip = client.offeredIP; // Client is now configured
+
+            const message = `DHCP ACK (Unicast) - Confirmed! Lease granted for IP ${client.ip}.`;
+            logMessage('SERVER', message);
+            
+            logMessage('SYSTEM', `SUCCESS! Client is now configured with a valid IP.`);
+            updateClientDisplay();
+
+            client.isProcessing = false;
+            document.getElementById('start-button').disabled = false;
+            document.getElementById('start-button').textContent = 'Start DHCP Process (Request IP)';
+        }
+
+        // Initialize the display on load
+        window.onload = updateClientDisplay;
+
+    </script>
+</body>
+</html>

@@ -22,7 +22,7 @@
     .card{background:var(--card);padding:12px;border-radius:10px;text-decoration:none;color:var(--text);display:block;border:1px solid rgb(202, 185, 28);transition:transform .12s ease,box-shadow .12s ease; text-align: center; width: 225px;}
     .card:hover{transform:translateY(-6px);box-shadow:0 10px 30px rgba(2,6,23,0.6)}
     .card h3{margin:6px 0 6px;font-size:15px}
-    .card .file{color:#0b1220;font-size:11px}
+    .card .file{color:#0b1220;font-size:1px}
     .card img.icon{width:64px;height:64px;border-radius:10px;display:block;margin:8px auto}
     footer{margin-top:20px;color:var(--muted);font-size:13px}
     @media (max-width:520px){body{padding:14px}.card h3{font-size:14px}}
@@ -43,6 +43,18 @@
     <div class="search">
       <input id="filter" placeholder="Search simulations (by filename or keyword)…" aria-label="Search simulations">
     </div>
+
+    <!-- AI handler panel -->
+    <section id="ai-panel" style="margin:18px 0;padding:12px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.03)">
+      <h2 style="margin:0 0 10px;font-size:15px">Ask the AI</h2>
+      <p style="margin:0 0 10px;color:var(--muted);font-size:13px">Send input to your Netlify Function at <code>/netlify/functions/ai-handler</code> and display the processed result.</p>
+      <textarea id="ai-input" rows="3" style="width:100%;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:rgba(0,0,0,0.35);color:var(--text);resize:vertical" placeholder="Type text for the AI to analyze..."></textarea>
+      <div style="display:flex;gap:8px;margin-top:10px;align-items:center">
+        <button id="ai-submit" style="background:var(--accent);color:#001219;border:none;padding:8px 12px;border-radius:8px;cursor:pointer">Send</button>
+        <div id="ai-status" style="color:var(--muted);font-size:13px">Ready</div>
+      </div>
+      <div id="ai-result" aria-live="polite" style="margin-top:12px;padding:10px;border-radius:8px;background:rgba(0,0,0,0.25);min-height:36px;color:var(--text)"></div>
+    </section>
 
     <main>
       <div id="grid" class="grid" aria-live="polite">
@@ -135,6 +147,76 @@
       if(!q) { render(sims); return }
       const filtered = sims.filter(([file,title]) => (file+ ' ' + title).toLowerCase().includes(q));
       render(filtered);
+    });
+
+    // --- Netlify Function integration: POST user input and display result ---
+    const aiInput = document.getElementById('ai-input');
+    const aiSubmit = document.getElementById('ai-submit');
+    const aiStatus = document.getElementById('ai-status');
+    const aiResult = document.getElementById('ai-result');
+
+    async function postToFunction(path, payload){
+      const res = await fetch(path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      return res;
+    }
+
+    async function sendToAiHandler(inputText){
+      aiStatus.textContent = 'Sending...';
+      aiResult.textContent = '';
+      const payload = { input: inputText };
+
+      // Try the user-provided path, then a dot-prefixed Netlify dev path as a fallback
+      const candidates = ['/netlify/functions/ai-handler', '/.netlify/functions/ai-handler'];
+      let lastErr = null;
+
+      for(const p of candidates){
+        try{
+          const res = await postToFunction(p, payload);
+          if(res.status === 404){ lastErr = new Error('Not found at ' + p); continue }
+          if(!res.ok){
+            const text = await res.text().catch(()=>res.statusText);
+            throw new Error(`Error ${res.status}: ${text}`);
+          }
+
+          const contentType = res.headers.get('content-type') || '';
+          if(contentType.includes('application/json')){
+            const json = await res.json();
+            return json;
+          } else {
+            const text = await res.text();
+            return { result: text };
+          }
+        }catch(err){
+          lastErr = err;
+        }
+      }
+      throw lastErr || new Error('Failed to reach AI function');
+    }
+
+    aiSubmit.addEventListener('click', async ()=>{
+      const text = aiInput.value.trim();
+      if(!text){ aiStatus.textContent = 'Enter input first'; return }
+      aiStatus.textContent = 'Processing...';
+      aiSubmit.disabled = true;
+      try{
+        const out = await sendToAiHandler(text);
+        // Display result: prefer out.result or stringify object
+        if(out && typeof out === 'object'){
+          aiResult.textContent = out.result ?? JSON.stringify(out, null, 2);
+        } else {
+          aiResult.textContent = String(out);
+        }
+        aiStatus.textContent = 'Done';
+      }catch(err){
+        aiStatus.textContent = 'Error';
+        aiResult.textContent = err.message || String(err);
+      }finally{
+        aiSubmit.disabled = false;
+      }
     });
   </script>
 </body>

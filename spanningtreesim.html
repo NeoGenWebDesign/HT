@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spanning Tree Protocol (STP) Simulator</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Consolas', 'Courier New', monospace;
+            background: linear-gradient(180deg, #353636 50%, #032a36 75%);
+            min-height: 100vh;
+        }
+        a {
+            display: block;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            text-align: center;
+        }
+        .container-card {
+            background-color: white;
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+            padding: 2rem;
+        }
+        .vis-area {
+            position: relative;
+            height: 450px;
+            width: 100%;
+            margin-bottom: 2rem;
+        }
+        .switch {
+            position: absolute;
+            width: 120px;
+            height: 120px;
+            background-color: #3b82f6; /* Blue */
+            color: white;
+            border-radius: 0.75rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.875rem;
+            font-weight: bold;
+            box-shadow: 0 4px 10px rgba(59, 130, 246, 0.5);
+            transition: all 0.5s ease;
+            z-index: 10;
+            border: 3px solid transparent;
+        }
+        .switch.root {
+            background-color: #8cbd08; /* Green */
+            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.8);
+            border-color: #fcd34d; /* Gold border */
+        }
+        .switch-details {
+            margin-top: 5px;
+            font-size: 0.65rem;
+            text-align: center;
+            line-height: 1;
+        }
+
+        .port-connector {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: #93c5fd;
+            z-index: 15;
+            transition: all 0.5s ease;
+            cursor: default;
+        }
+
+        .port-connector.dp { background-color: #34d399; /* DP - Green */ }
+        .port-connector.rp { background-color: #f59e0b; /* RP - Orange */ }
+        .port-connector.bp { background-color: #ef4444; /* BP - Red */ }
+
+        .link {
+            position: absolute;
+            height: 3px;
+            background-color: #94a3b8;
+            transform-origin: 0 0;
+            z-index: 5;
+            transition: background-color 0.5s;
+        }
+        .link.active {
+            background-color: #34d399;
+            box-shadow: 0 0 8px #34d399;
+        }
+        .link.blocked {
+            background-color: #ef4444;
+            opacity: 0.5;
+            border-style: dashed;
+        }
+
+        .console-log {
+            min-height: 150px;
+            background-color: #1f2937;
+            color: #d1d5db;
+            font-family: 'Consolas', 'Courier New', monospace;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            font-size: 0.85rem;
+        }
+        .log-root { color: #fcd34d; } 
+        .log-rp { color: #f59e0b; } 
+        .log-dp { color: #34d399; }
+        .log-bp { color: #ef4444; }
+        .log-step { color: #60a5fa; font-weight: bold;}
+    </style>
+</head>
+<body class="p-4 md:p-10 min-h-screen">
+
+    <div class="max-w-4xl mx-auto">
+        <h1 class="text-3xl font-extrabold text-orange-500 gmb-2 text-center">
+            Spanning Tree Protocol (STP) Simulation
+        </h1>
+        <p class="text-lg text-white mb-6 text-center">
+            Watch how STP eliminates Layer 2 loops by forcing one port into a Blocking state.
+        </p>
+        <p class="text-sm text-yellow-500 mb-8 text-center">
+            Press F5 or Reload/Refresh Browser to Reset Simulation.
+        </p>
+        <a id="link" class="text-sm hover:text-lime-500 text-yellow-200 mb-8 text-center" href="index.html">
+            Back to Simulations Index
+        </a>
+
+        <div class="container-card">
+            <h3 class="text-xl font-semibold text-gray-800 mb-3">STP Basics: The Loop Prevention Mechanism</h3>
+            <p class="text-sm text-gray-700 mb-4">
+                STP (IEEE 802.1D) works by creating a single, loop-free logical path, known as the Spanning Tree, through a network. This prevents broadcast storms and MAC address table instability.
+                <br><span class="font-bold">Key Elements:</span>
+                <ul class="list-disc list-inside ml-4 mt-1 text-sm">
+                    <li><span class="text-lime-600 font-semibold">Root Bridge:</span> The switch elected to be the central point of the spanning tree (lowest Bridge ID). All paths lead to the Root.</li>
+                    <li><span class="text-yellow-600 font-semibold">Root Port (RP):</span> On non-root switches, the port with the best (lowest cost) path back to the Root Bridge.</li>
+                    <li><span class="text-green-600 font-semibold">Designated Port (DP):</span> The port on each network segment (link) that provides the best path back to the Root Bridge.</li>
+                    <li><span class="text-red-600 font-semibold">Blocking Port (BP):</span> The remaining port(s). This port stops forwarding data traffic to prevent the loop but still listens for BPDU changes.</li>
+                </ul>
+            </p>
+
+            <!-- Simulation Area -->
+            <div id="stp-vis" class="vis-area">
+                <!-- Switches, Ports, and Links injected here -->
+            </div>
+
+            <div class="flex justify-center mb-6">
+                <button onclick="runStpSimulation()" id="run-btn"
+                        class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg shadow-xl transition duration-150 text-center text-sm disabled:opacity-50">
+                    Run Full STP Calculation
+                </button>
+            </div>
+
+            <h3 class="text-xl font-semibold text-gray-800 mb-3">STP Calculation Log</h3>
+            <div id="stp-log" class="console-log">
+                <p class="log-step">Topology: Three switches (SW1, SW2, SW3) connected in a loop.</p>
+                <p class="log-step">Goal: Determine the Root Bridge, Root Ports (RP), Designated Ports (DP), and one Blocking Port (BP).</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let isSimulationRunning = false;
+        
+        // Define STP Topology and Parameters
+        const STP_TOPOLOGY = {
+            SW1: { 
+                id: 'SW1', 
+                priority: 32768, 
+                mac: '00:00:00:00:00:1A', 
+                x: 200, y: 150, 
+                links: ['SW2', 'SW3'] 
+            },
+            SW2: { 
+                id: 'SW2', 
+                priority: 4096, // Lowest Priority -> Expected Root
+                mac: '00:00:00:00:00:2B', 
+                x: 500, y: 350, 
+                links: ['SW1', 'SW3'] 
+            },
+            SW3: { 
+                id: 'SW3', 
+                priority: 32768, 
+                mac: '00:00:00:00:00:3C', 
+                x: 800, y: 150, 
+                links: ['SW1', 'SW2'] 
+            }
+        };
+
+        // Standard link cost for 100Mbps Ethernet (used for this demo)
+        const COST_100MBPS = 4;
+        const SW_IDS = Object.keys(STP_TOPOLOGY);
+        let currentPositions = {}; // Stores calculated X, Y coordinates
+
+        // --- Utility Functions ---
+
+        /** Logs a message to the console element */
+        function log(message, type = 'log-step') {
+            const consoleEl = document.getElementById('stp-log');
+            consoleEl.innerHTML += `<span class="${type}">${message}</span>\n`;
+            consoleEl.scrollTop = consoleEl.scrollHeight;
+        }
+
+        /** Pauses execution for a duration */
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        /** Combines Priority and MAC into Bridge ID string */
+        function getBridgeID(swId) {
+            const sw = STP_TOPOLOGY[swId];
+            return `${sw.priority.toString().padStart(5, '0')}.${sw.mac.replace(/:/g, '')}`;
+        }
+        
+        /** Gets the canonical link ID (e.g., SW1-SW2) */
+        function getLinkKey(id1, id2) {
+            return id1 < id2 ? `${id1}-${id2}` : `${id2}-${id1}`;
+        }
+
+        // --- Visualization Setup ---
+
+        /** Clears and draws the network topology */
+        function initializeVisualization() {
+            const container = document.getElementById('stp-vis');
+            container.innerHTML = '';
+            const { width, height } = container.getBoundingClientRect();
+
+            // Normalize positions to the container size (x: 0-1000, y: 0-400)
+            const scaleX = width / 1000;
+            const scaleY = height / 450; 
+
+            // 1. Draw Links
+            const drawnLinks = new Set();
+            SW_IDS.forEach(id1 => {
+                STP_TOPOLOGY[id1].links.forEach(id2 => {
+                    const linkKey = getLinkKey(id1, id2);
+                    if (!drawnLinks.has(linkKey)) {
+                        drawLink(id1, id2, scaleX, scaleY, container);
+                        drawnLinks.add(linkKey);
+                    }
+                });
+            });
+
+            // 2. Draw Switches and Ports
+            SW_IDS.forEach(id => {
+                drawSwitch(id, scaleX, scaleY, container);
+            });
+            
+            // 3. Draw Port Connectors (adjusting position relative to the switch center)
+            drawPortConnectors(scaleX, scaleY, container);
+
+            // Set initial state
+            resetStpState();
+        }
+        
+        /** Resets visual state for a new run */
+        function resetStpState() {
+            document.querySelectorAll('.switch').forEach(sw => {
+                sw.classList.remove('root');
+                sw.style.borderColor = 'transparent';
+            });
+            document.querySelectorAll('.link').forEach(link => {
+                link.classList.remove('active', 'blocked');
+            });
+            document.querySelectorAll('.port-connector').forEach(port => {
+                port.classList.remove('dp', 'rp', 'bp');
+                port.title = '';
+            });
+             document.getElementById('run-btn').disabled = false;
+             document.getElementById('run-btn').textContent = 'Run Full STP Calculation';
+        }
+
+        /** Draws a connection line between two switches */
+        function drawLink(id1, id2, scaleX, scaleY, container) {
+            const start = { x: STP_TOPOLOGY[id1].x * scaleX, y: STP_TOPOLOGY[id1].y * scaleY };
+            const end = { x: STP_TOPOLOGY[id2].x * scaleX, y: STP_TOPOLOGY[id2].y * scaleY };
+            
+            const dx = end.x - start.x;
+            const dy = end.y - start.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+            
+            const linkEl = document.createElement('div');
+            linkEl.className = 'link';
+            linkEl.id = `link-${getLinkKey(id1, id2)}`;
+            linkEl.style.width = `${distance}px`;
+            // Adjust start position to the edge of the switch (approx)
+            linkEl.style.left = `${start.x}px`;
+            linkEl.style.top = `${start.y}px`;
+            linkEl.style.transform = `rotate(${angle}deg)`;
+            
+            container.appendChild(linkEl);
+        }
+
+        /** Draws a single switch element */
+        function drawSwitch(id, scaleX, scaleY, container) {
+            const data = STP_TOPOLOGY[id];
+            const bridgeId = getBridgeID(id);
+            
+            // Calculate final position (center of the switch)
+            const x = data.x * scaleX;
+            const y = data.y * scaleY;
+            currentPositions[id] = { x, y };
+
+            const swEl = document.createElement('div');
+            swEl.className = 'switch';
+            swEl.id = `switch-${id}`;
+            // Adjust position to center the 120px switch element
+            swEl.style.left = `${x - 60}px`; 
+            swEl.style.top = `${y - 60}px`; 
+            swEl.innerHTML = `
+                <div class="text-xl">${id}</div>
+                <div class="switch-details">
+                    PRI: ${data.priority}<br>
+                    MAC: ${data.mac}<br>
+                    BID: ${bridgeId}
+                </div>
+            `;
+            container.appendChild(swEl);
+        }
+
+        /** Draws small circles to represent ports for clearer state indication */
+        function drawPortConnectors(scaleX, scaleY, container) {
+             const portOffsets = {
+                'SW1-SW2': { x: -60, y: -60 }, // Top-Left corner relative to center
+                'SW1-SW3': { x: 60, y: -60 },  // Top-Right
+                'SW2-SW1': { x: -60, y: 60 },  // Bottom-Left
+                'SW2-SW3': { x: 60, y: 60 },   // Bottom-Right
+                'SW3-SW1': { x: -60, y: -60 }, // Top-Left
+                'SW3-SW2': { x: 60, y: 60 }    // Bottom-Right
+            };
+
+            SW_IDS.forEach(swId => {
+                const center = currentPositions[swId];
+                STP_TOPOLOGY[swId].links.forEach(neighborId => {
+                    const key = `${swId}-${neighborId}`;
+                    const offset = portOffsets[key];
+
+                    const portEl = document.createElement('div');
+                    portEl.className = 'port-connector';
+                    portEl.id = `port-${key}`;
+                    // Position relative to switch center, adjust for port element size (10px)
+                    portEl.style.left = `${center.x + offset.x - 5}px`; 
+                    portEl.style.top = `${center.y + offset.y - 5}px`; 
+                    
+                    container.appendChild(portEl);
+                });
+            });
+        }
+
+
+        // --- Core STP Logic ---
+
+        function calculateSTP() {
+            const switches = JSON.parse(JSON.stringify(STP_TOPOLOGY));
+            const bids = SW_IDS.map(id => ({ id, bid: getBridgeID(id) }));
+            let portStates = {};
+
+            // 1. Root Bridge Election
+            // Sort by Bridge ID (BID = Priority.MAC)
+            bids.sort((a, b) => a.bid.localeCompare(b.bid));
+            const rootId = bids[0].id;
+            const rootBid = bids[0].bid;
+            
+            // Log Root Election
+            log(`STEP 1: Root Bridge Election`, 'log-step');
+            log(`Root Bridge ID (Lowest): ${rootBid} (${rootId})`, 'log-root');
+            
+            // 2. Determine Root Path Cost for all switches (shortest path to root)
+            // Since all links are 100Mbps (Cost 4), paths are simple.
+            SW_IDS.forEach(id => {
+                if (id === rootId) {
+                    switches[id].rootPathCost = 0;
+                    switches[id].root = true;
+                    log(`${id}: Is the Root Bridge. Root Path Cost = 0`, 'log-root');
+                } else {
+                    // All other switches are one hop away from the root through one link (cost 4)
+                    switches[id].rootPathCost = COST_100MBPS;
+                    log(`${id}: Best path to Root (${rootId}) has a cost of ${COST_100MBPS}.`, 'log-step');
+                }
+            });
+
+            // 3. Port Role Determination (RP, DP, BP)
+            SW_IDS.forEach(swId => {
+                switches[swId].links.forEach(neighborId => {
+                    const portKey = `${swId}-${neighborId}`;
+                    const linkKey = getLinkKey(swId, neighborId);
+                    
+                    // Root Bridge Ports are always Designated Ports (DP)
+                    if (swId === rootId) {
+                        portStates[portKey] = { state: 'DP', explanation: `Root Bridge ports are always Designated Ports (DP).` };
+                        return;
+                    }
+
+                    // For Non-Root Bridges:
+
+                    // a) Root Port (RP) selection: Lowest Path Cost to the Root
+                    // In this simple topology, the only port connecting to the Root is the RP.
+                    const isDirectlyConnectedToRoot = switches[swId].links.includes(rootId);
+                    if (neighborId === rootId) {
+                         portStates[portKey] = { state: 'RP', explanation: `Lowest cost path to Root (${rootId}) is directly through this port.` };
+                         log(`${swId} Port to ${neighborId}: Root Port (RP). Best path to Root.`, 'log-rp');
+                         return;
+                    }
+
+                    // b) Designated Port (DP) vs Blocked Port (BP) selection on a segment
+                    // Consider the segment between SW1 and SW3 (Link SW1-SW3).
+                    
+                    if (linkKey === 'SW1-SW3') {
+                        // Compare the two ends of the segment: SW1 vs SW3
+                        // Both have Root Path Cost of 4.
+                        // Tie-breaker 1: Lowest Sender Bridge ID (SW1 BID vs SW3 BID)
+                        const sw1Bid = getBridgeID('SW1');
+                        const sw3Bid = getBridgeID('SW3');
+
+                        if (sw1Bid < sw3Bid) {
+                            // SW1 wins. SW1 port is DP. SW3 port is BP.
+                            if (swId === 'SW1') {
+                                portStates[portKey] = { state: 'DP', explanation: `Segment SW1-SW3: Both sides have cost 4. SW1 wins the tie-breaker (lower BID).` };
+                                log(`SW1 Port to SW3: Designated Port (DP). SW1 has lower BID than SW3.`, 'log-dp');
+                            } else { // swId === 'SW3'
+                                portStates[portKey] = { state: 'BP', explanation: `Segment SW1-SW3: SW1 is the Designated Bridge. This port must Block to prevent the loop.` };
+                                log(`SW3 Port to SW1: Blocking Port (BP). Loop-prevention port.`, 'log-bp');
+                            }
+                        } else {
+                            // SW3 wins - should not happen with defined MACs. Fallback logic just in case.
+                            portStates[portKey] = { state: 'DP', explanation: `Designated Port (DP). Fallback logic applied.` };
+                        }
+                    }
+                });
+            });
+
+            // Clean up: Ensure only the best port on each segment is DP/RP, and the other is BP
+            // In a loop, one port will be RP, and one link will have a BP. The BP must be found on the non-designated switch for that segment.
+            
+            // The logic above correctly identifies:
+            // SW2: All DP (Root)
+            // SW1-SW2: SW2 is DP, SW1 is RP
+            // SW2-SW3: SW2 is DP, SW3 is RP
+            // SW1-SW3: SW1 is DP (lower BID), SW3 is BP
+
+            return { rootId, rootBid, portStates };
+        }
+
+        /** Updates the visualization based on the calculated STP state */
+        function updateVisualization(stpResult) {
+            // 1. Highlight Root Bridge
+            const rootSwEl = document.getElementById(`switch-${stpResult.rootId}`);
+            if (rootSwEl) {
+                rootSwEl.classList.add('root');
+                rootSwEl.innerHTML += `<div class="mt-2 text-yellow-300">ROOT BRIDGE</div>`;
+            }
+
+            // 2. Set Port States and Link States
+            for (const portKey in stpResult.portStates) {
+                const { state, explanation } = stpResult.portStates[portKey];
+                const portEl = document.getElementById(`port-${portKey}`);
+                if (portEl) {
+                    portEl.classList.add(state.toLowerCase());
+                    portEl.title = `Role: ${state} - ${explanation}`;
+                }
+
+                // Update link state (only once per link)
+                const [sw1, sw2] = portKey.split('-');
+                const linkKey = getLinkKey(sw1, sw2);
+                const neighborPortKey = `${sw2}-${sw1}`;
+                const neighborState = stpResult.portStates[neighborPortKey]?.state;
+                
+                const linkEl = document.getElementById(`link-${linkKey}`);
+                if (linkEl && !linkEl.classList.contains('blocked')) {
+                    if (state === 'BP' || (neighborState && neighborState === 'BP')) {
+                        linkEl.classList.add('blocked');
+                    } else {
+                        linkEl.classList.add('active');
+                    }
+                }
+            }
+        }
+
+        // --- Main Simulation Runner ---
+
+        async function runStpSimulation() {
+            if (isSimulationRunning) return;
+            isSimulationRunning = true;
+            document.getElementById('run-btn').disabled = true;
+            document.getElementById('run-btn').textContent = 'Calculation Complete!';
+            document.getElementById('stp-log').innerHTML = ''; // Clear log
+
+            resetStpState();
+            
+            log('STARTING STP PROCESS...', 'log-step');
+            await sleep(500);
+
+            log('--- PHASE 1: ROOT BRIDGE SELECTION (Lowest Bridge ID) ---', 'log-step');
+            
+            const bIds = SW_IDS.map(id => ({ id, bid: getBridgeID(id) }));
+            bIds.forEach(b => log(`${b.id} BID: ${b.bid} (Priority ${STP_TOPOLOGY[b.id].priority} + MAC ${STP_TOPOLOGY[b.id].mac})`, 'log-step'));
+            
+            await sleep(1500);
+            
+            const stpResult = calculateSTP(); // Run all calculation logic at once
+            
+            log('--- PHASE 2: ROOT PORT (RP) SELECTION (Lowest Root Path Cost to Root) ---', 'log-step');
+            await sleep(1500);
+
+            log('--- PHASE 3: DESIGNATED PORT (DP) / BLOCKING PORT (BP) SELECTION ---', 'log-step');
+            await sleep(1500);
+
+            updateVisualization(stpResult);
+            
+            log('----------------------------------------------------', 'log-step');
+            log(`STP Final Result: Loop prevented by BLOCKING the port on SW3 connected to SW1.`, 'log-step');
+            log(`The final topology is now a single, loop-free tree rooted at ${stpResult.rootId}.`, 'log-step');
+            
+            isSimulationRunning = false;
+        }
+
+        // --- Event Listeners and Initial Setup ---
+        
+        window.addEventListener('load', initializeVisualization);
+        window.addEventListener('resize', initializeVisualization);
+    </script>
+</body>
+</html>

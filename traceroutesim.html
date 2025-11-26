@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Traceroute/Tracert Simulator</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Consolas', 'Courier New', monospace;
+            background: linear-gradient(180deg, #353636 50%, #032a36 75%);
+            min-height: 100vh;
+        }
+        a {
+            display: block;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            text-align: center;
+        }
+        .container-card {
+            background-color: white;
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+            padding: 2rem;
+            transition: all 0.3s ease;
+            border-top: 4px solid;
+        }
+        .terminal {
+            background-color: #0f172a; /* Slate 900 */
+            color: #10b981; /* Emerald 500 */
+            font-family: 'Consolas', 'Courier New', monospace;
+            border-radius: 0.75rem;
+            padding: 1rem;
+            font-size: 1rem;
+        }
+        .log-container {
+            height: 450px;
+            overflow-y: auto;
+            background-color: #1e293b; /* Slate 800 */
+            color: #e2e8f0; /* Slate 200 */
+            font-family: 'Consolas', 'Courier New', monospace;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            font-size: 0.8rem;
+            line-height: 1.4;
+        }
+        .log-stage { color: #f97316; font-weight: bold; } /* Orange */
+        .log-info { color: #94a3b8; } /* Slate 400 */
+        .log-packet-send { color: #3b82f6; } /* Blue */
+        .log-icmp-recv { color: #facc15; } /* Yellow */
+        .log-success { color: #22c55e; font-weight: bold; } /* Green */
+
+        .output-block {
+            background-color: #0f172a;
+            color: white;
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            white-space: pre;
+            overflow-x: auto;
+        }
+        .output-hop {
+            color: #d1d5db; /* Gray 300 */
+        }
+        .output-time {
+            color: #10b981; /* Emerald 500 */
+            font-weight: bold;
+        }
+        .output-ip {
+            color: #38bdf8; /* Sky 400 */
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-10 min-h-screen">
+
+    <div class="max-w-6xl mx-auto">
+        <h1 class="text-4xl font-extrabold text-orange-500 mb-2 text-center">
+            Traceroute/Tracert Simulation
+        </h1>
+        <p class="text-lg text-white mb-8 text-center">
+            Visualize the key concepts: **Time-to-Live (TTL)** and **ICMP Time Exceeded** messages.
+        </p>
+        <p class="text-sm text-yellow-500 mb-8 text-center">
+            Press F5 or Reload/Refresh Browser to Reset Simulation.
+        </p>
+        <a id="link" class="text-sm hover:text-lime-500 text-yellow-200 mb-8 text-center" href="index.html">
+            Back to Simulations Index
+        </a>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            <!-- Control and Output -->
+            <div class="container-card border-indigo-600">
+                <h3 class="text-2xl font-bold text-indigo-800 mb-4">Command Input & Result</h3>
+                <div class="flex flex-col space-y-4">
+                    <label for="destination" class="text-gray-700 font-medium">Destination (Simulated IP):</label>
+                    <div class="terminal flex items-center space-x-2">
+                        <span class="text-white">$ tracert</span>
+                        <input type="text" id="destination" value="98.137.246.7" 
+                               class="bg-transparent border-none text-white w-full focus:ring-0 focus:outline-none p-0" 
+                               placeholder="Enter IP or Hostname">
+                    </div>
+                </div>
+                
+                <button id="start-btn" onclick="startTraceroute()" 
+                        class="mt-6 w-full bg-orange-400 hover:bg-orange-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-150 disabled:opacity-50">
+                    Start Trace (Simulate ICMP Packets)
+                </button>
+
+                <h4 class="text-xl font-bold text-gray-800 mt-8 mb-4">Simulated Traceroute Output</h4>
+                <div id="traceroute-output" class="output-block min-h-[50px]">
+                    Tracing route to [98.137.246.7] over a maximum of 30 hops:
+                </div>
+            </div>
+
+            <!-- Simulation Log -->
+            <div class="container-card border-gray-700">
+                <h3 class="text-2xl font-bold text-gray-800 mb-4">System Log (Kernel & Router Interaction)</h3>
+                <div id="log" class="log-container">
+                    <p class="log-info">System: Ready. Enter a destination and click 'Start Trace' to begin the simulation.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Simulated Network Path Data ---
+        // This simulates the path the packets will take. Each object is a router (hop).
+        const simulatedPath = [
+            { ip: '192.168.1.1', name: 'Home Router', baseLatency: 2 },
+            { ip: '10.0.0.1', name: 'ISP Gateway', baseLatency: 5 },
+            { ip: '203.0.113.44', name: 'Regional Backbone', baseLatency: 15 },
+            { ip: '198.51.100.12', name: 'Core Exchange Point', baseLatency: 35 },
+            { ip: '98.137.246.7', name: 'Destination Server', baseLatency: 50 }, // Final destination
+        ];
+
+        // --- State Variables and DOM References ---
+        let isRunning = false;
+        const log = document.getElementById('log');
+        const tracerouteOutput = document.getElementById('traceroute-output');
+        const destinationInput = document.getElementById('destination');
+        const startBtn = document.getElementById('start-btn');
+        const maxHops = 5; // Max hops for this specific simulation
+
+        // --- Utility Functions ---
+
+        /** Logs a message to the simulation console with appropriate styling. */
+        function logMessage(text, className = 'log-info') {
+            const entry = document.createElement('p');
+            entry.className = className + ' mb-1';
+            entry.textContent = text;
+            log.appendChild(entry);
+            log.scrollTop = log.scrollHeight;
+        }
+
+        /** Delays execution to simulate time passage. */
+        const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+        /** Generates a simulated latency time (Base +/- 5ms). */
+        function getLatency(base) {
+            return base + Math.floor(Math.random() * 10) - 5;
+        }
+
+        /** Formats a single result line for the output block. */
+        function formatOutputLine(hopNumber, ip, times) {
+            const timeStrings = times.map(t => `<span class="output-time">${t} ms</span>`).join('  ');
+            return `<span class="output-hop">${String(hopNumber).padStart(2, ' ')} </span>  ${timeStrings}  <span class="output-ip">${ip}</span>\n`;
+        }
+
+        // --- Core Simulation Logic ---
+
+        async function runTraceroute(destinationIP) {
+            if (isRunning) return;
+            isRunning = true;
+            startBtn.disabled = true;
+            tracerouteOutput.textContent = `Tracing route to [${destinationIP}] over a maximum of 30 hops:\n`;
+            log.innerHTML = '';
+
+            let hopNumber = 1;
+            let pathIndex = 0; // Index in the simulatedPath array
+            
+            logMessage(`\n--- START TRACE TO ${destinationIP} ---`, 'text-lg log-stage');
+            await delay(500);
+
+            // Loop continues until we reach the end of the simulated path
+            while (pathIndex < simulatedPath.length && hopNumber <= maxHops) {
+                const currentHop = simulatedPath[pathIndex];
+                const isDestination = (pathIndex === simulatedPath.length - 1);
+                
+                logMessage(`\n--- HOP ${hopNumber}: TTL=${hopNumber} ---`, 'text-lg log-stage');
+                await delay(700);
+
+                const latencies = [];
+                const probeCount = 3;
+
+                for (let i = 1; i <= probeCount; i++) {
+                    logMessage(`(Pkt ${i}/${probeCount}) Kernel sends ICMP Echo Request (TTL=${hopNumber}) to ${destinationIP}`, 'log-packet-send');
+                    await delay(getLatency(currentHop.baseLatency) * 0.5); // Simulate time to reach router
+
+                    let returnMessage;
+                    let latency;
+
+                    if (isDestination) {
+                        // Destination reached
+                        returnMessage = `ICMP Echo Reply (Type 0)`;
+                        latency = getLatency(currentHop.baseLatency);
+                        logMessage(`[${currentHop.name}] receives the packet. TTL is ${currentHop.baseLatency} > 0. Packet accepted.`, 'log-success');
+                        logMessage(`[${currentHop.name}] responds with ${returnMessage} in ${latency}ms.`, 'log-success');
+                    } else {
+                        // Intermediate Router (Hop)
+                        returnMessage = `ICMP Time Exceeded (Type 11)`;
+                        latency = getLatency(currentHop.baseLatency);
+                        logMessage(`[${currentHop.name}] receives the packet. TTL is decremented to ${hopNumber - 1}. TTL = 0.`, 'log-icmp-recv');
+                        logMessage(`[${currentHop.name}] discards packet and responds with ${returnMessage} from ${currentHop.ip} in ${latency}ms.`, 'log-icmp-recv');
+                    }
+                    
+                    latencies.push(latency);
+                    await delay(latency * 0.5); // Simulate time for reply to return
+                }
+
+                // Update the terminal output
+                tracerouteOutput.innerHTML += formatOutputLine(hopNumber, currentHop.ip, latencies);
+                
+                if (isDestination) {
+                    logMessage(`\n*** TRACE COMPLETE *** Destination ${destinationIP} reached and responded with ICMP Echo Reply.`, 'log-success');
+                    break;
+                }
+                
+                hopNumber++;
+                pathIndex++;
+            }
+
+            if (hopNumber > maxHops) {
+                logMessage(`\n*** TRACE ENDED *** Max hops (${maxHops}) reached before destination.`, 'log-stage');
+            }
+
+            isRunning = false;
+            startBtn.disabled = false;
+        }
+
+        function startTraceroute() {
+            const destination = destinationInput.value.trim();
+            if (!destination) {
+                logMessage("Please enter a destination IP or hostname.", 'log-stage');
+                return;
+            }
+            runTraceroute(destination);
+        }
+
+        // Initialize on load
+        window.onload = function() {
+            // Check if the page is ready
+            startBtn.disabled = false;
+        };
+
+    </script>
+</body>
+</html>

@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Public to Private Network Traversal (NAT) Simulator</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Consolas', 'Courier New', monospace;
+            background: linear-gradient(180deg, #353636 50%, #032a36 75%);
+            min-height: 100vh;
+        }
+        a {
+            display: block;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            text-align: center;
+        }
+        .container-card {
+            background-color: white;
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+            padding: 2rem;
+            transition: all 0.3s ease;
+            border-left: 4px solid;
+        }
+        .terminal {
+            background-color: #0f172a; /* Slate 900 */
+            color: #10b981; /* Emerald 500 */
+            font-family: 'Consolas', 'Courier New', monospace;
+            border-radius: 0.75rem;
+            padding: 1rem;
+            font-size: 1rem;
+        }
+        .log-container {
+            height: 400px;
+            overflow-y: auto;
+            background-color: #1e293b; /* Slate 800 */
+            color: #e2e8f0; /* Slate 200 */
+            font-family: 'Consolas', 'Courier New', monospace;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            font-size: 0.8rem;
+            line-height: 1.4;
+        }
+        .log-stage { color: #f97316; font-weight: bold; } /* Orange */
+        .log-info { color: #94a3b8; } /* Slate 400 */
+        .log-packet-in { color: #3b82f6; } /* Blue */
+        .log-packet-out { color: #22c55e; } /* Green */
+        .log-nat-table { color: #facc15; font-weight: bold; } /* Yellow */
+        .log-error { color: #ef4444; font-weight: bold; } /* Red */
+        
+        .nat-table-display {
+            background-color: #f1f5f9; /* Slate 100 */
+            border-radius: 0.5rem;
+            padding: 1rem;
+            font-size: 0.9rem;
+        }
+        .nat-table-display th, .nat-table-display td {
+            padding: 0.5rem;
+            text-align: left;
+            border-bottom: 1px solid #cbd5e1; /* Slate 300 */
+        }
+        .nat-table-display th {
+            font-weight: bold;
+            color: #1e293b;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-10 min-h-screen">
+
+    <div class="max-w-6xl mx-auto">
+        <h1 class="text-4xl font-extrabold text-orange-500 mb-2 text-center">
+            NAT Traversal Simulator (Public to Private)
+        </h1>
+        <p class="text-lg text-white mb-8 text-center">
+            Visualize how the NAT Router uses a translation table to allow public hosts to connect to a private network service.
+        </p>
+        <p class="text-sm text-yellow-500 mb-8 text-center">
+            Press F5 or Reload/Refresh Browser to Reset Simulation.
+        </p>
+        <a id="link" class="text-sm hover:text-lime-500 text-yellow-200 mb-8 text-center" href="index.html">
+            Back to Simulations Index
+        </a>
+
+        <!-- Network Topology Information -->
+        <div class="mb-8 p-6 bg-yellow-50 rounded-xl border border-yellow-200">
+            <h3 class="text-xl font-bold text-yellow-800 mb-3">Simulated Topology:</h3>
+            <ul class="list-disc list-inside text-gray-700 space-y-1">
+                <li>**Public Client (Source):** <span class="font-mono text-blue-600">203.0.113.10:50000</span> (Dynamic Port)</li>
+                <li>**NAT Router (Public Interface):** <span class="font-mono text-blue-600">198.51.100.5</span></li>
+                <li>**NAT Router (Private Interface):** <span class="font-mono text-green-600">192.168.1.1</span></li>
+                <li>**Private Host (Destination Server):** <span class="font-mono text-green-600">192.168.1.5:80</span> (Web Server)</li>
+            </ul>
+        </div>
+        
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            
+            <!-- NAT Table Status -->
+            <div class="container-card border-yellow-500">
+                <h3 class="text-2xl font-bold text-gray-800 mb-4">NAT Translation Table (Router's View)</h3>
+                <div id="nat-table-container" class="nat-table-display">
+                    <table class="w-full">
+                        <thead>
+                            <tr>
+                                <th>Private Source</th>
+                                <th>Public Translation</th>
+                                <th>TTL</th>
+                            </tr>
+                        </thead>
+                        <tbody id="nat-table-body">
+                            <tr><td colspan="3" class="text-center text-gray-500">Table is empty. A rule must be added (Port Forwarding).</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="mt-4 p-3 bg-red-100 border border-red-300 rounded-lg text-red-800 text-sm">
+                    **Crucial Step:** To allow an *inbound* connection from the Public Client, the NAT Router must have a Port Forwarding rule pre-configured. We simulate this by clicking 'Initialize NAT Rule'.
+                </div>
+                <button id="init-btn" onclick="initializeNatRule()" 
+                        class="mt-4 w-full bg-red-600 hover:bg-red-900 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-150 disabled:opacity-80">
+                    1. Initialize NAT Rule (Port Forwarding)
+                </button>
+            </div>
+
+            <!-- Simulation Log -->
+            <div class="container-card border-blue-500">
+                <h3 class="text-2xl font-bold text-gray-800 mb-4">Packet Flow Log</h3>
+                <div id="log" class="log-container">
+                    <p class="log-info">System: Ready. Initialize the NAT rule and then click 'Start Simulation'.</p>
+                </div>
+                <button id="start-btn" onclick="startSimulation()" disabled
+                        class="mt-4 w-full bg-lime-700 hover:bg-green-900 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-150 disabled:opacity-80">
+                    2. Start Simulation (Public Client Connects)
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Simulated Network Parameters ---
+        const PUBLIC_CLIENT_IP = '203.0.113.10';
+        const PUBLIC_CLIENT_PORT = 50000;
+        const NAT_PUBLIC_IP = '198.51.100.5';
+        const PRIVATE_SERVER_IP = '192.168.1.5';
+        const PRIVATE_SERVER_PORT = 80;
+        const NAT_TRANSLATED_PORT = 8080; // The public port the server is exposed on (via port forwarding)
+
+        // --- State Variables and DOM References ---
+        let natTable = [];
+        let isRuleInitialized = false;
+        const log = document.getElementById('log');
+        const natTableBody = document.getElementById('nat-table-body');
+        const startBtn = document.getElementById('start-btn');
+        const initBtn = document.getElementById('init-btn');
+
+        // --- Utility Functions ---
+
+        /** Logs a message to the simulation console with appropriate styling. */
+        function logMessage(text, className = 'log-info') {
+            const entry = document.createElement('p');
+            entry.className = className + ' mb-1';
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${text}`;
+            log.appendChild(entry);
+            log.scrollTop = log.scrollHeight;
+        }
+
+        /** Delays execution to simulate time passage. */
+        const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+        /** Renders the NAT table content. */
+        function renderNatTable() {
+            natTableBody.innerHTML = '';
+            if (natTable.length === 0) {
+                natTableBody.innerHTML = '<tr><td colspan="3" class="text-center text-gray-500">Table is empty. A rule must be added (Port Forwarding).</td></tr>';
+                return;
+            }
+
+            natTable.forEach(entry => {
+                const row = natTableBody.insertRow();
+                row.innerHTML = `
+                    <td>${entry.privateSrcIP}:${entry.privateSrcPort}</td>
+                    <td>${entry.publicIP}:${entry.publicPort}</td>
+                    <td>${entry.ttl} sec</td>
+                `;
+                // Highlight the new row
+                if (entry.highlight) {
+                    row.classList.add('bg-yellow-200', 'font-bold');
+                    entry.highlight = false; // Remove highlight after render
+                }
+            });
+        }
+
+        /** Simulates the user pre-configuring a Port Forwarding rule. */
+        function initializeNatRule() {
+            if (isRuleInitialized) return;
+
+            // This is the static, pre-configured rule (Port Forwarding)
+            natTable.push({
+                privateSrcIP: PRIVATE_SERVER_IP,
+                privateSrcPort: PRIVATE_SERVER_PORT,
+                publicIP: NAT_PUBLIC_IP,
+                publicPort: NAT_TRANSLATED_PORT,
+                ttl: 'Static', // Static rule, no TTL
+                highlight: true
+            });
+
+            isRuleInitialized = true;
+            renderNatTable();
+            initBtn.disabled = true;
+            startBtn.disabled = false;
+            initBtn.textContent = "NAT Rule Initialized (Port 8080 -> 80)";
+            logMessage(`Port Forwarding Rule Added: Traffic to ${NAT_PUBLIC_IP}:${NAT_TRANSLATED_PORT} will be forwarded to ${PRIVATE_SERVER_IP}:${PRIVATE_SERVER_PORT}.`, 'log-nat-table');
+        }
+
+        // --- Core Simulation Logic ---
+
+        async function startSimulation() {
+            if (!isRuleInitialized) {
+                logMessage("Error: NAT rule must be initialized first (Port Forwarding).", 'log-error');
+                return;
+            }
+            startBtn.disabled = true;
+            log.innerHTML = '';
+            
+            await delay(500);
+            logMessage(`\n--- STEP 1: PUBLIC CLIENT SENDS PACKET ---`, 'log-stage');
+            logMessage(`Client at ${PUBLIC_CLIENT_IP}:${PUBLIC_CLIENT_PORT} wants to reach the web server.`, 'log-info');
+            logMessage(`Packet sent (Source: ${PUBLIC_CLIENT_IP}:${PUBLIC_CLIENT_PORT}, Destination: ${NAT_PUBLIC_IP}:${NAT_TRANSLATED_PORT})`, 'log-packet-in');
+            await delay(1500);
+
+            // --- Packet arrives at NAT router ---
+            logMessage(`\n--- STEP 2: NAT ROUTER RECEIVES INBOUND PACKET ---`, 'log-stage');
+            logMessage(`NAT Router (${NAT_PUBLIC_IP}) receives packet on its Public Interface.`, 'log-info');
+            await delay(1000);
+
+            // --- NAT Translation (Lookup) ---
+            logMessage(`NAT Router checks its Translation Table for ${NAT_PUBLIC_IP}:${NAT_TRANSLATED_PORT}.`, 'log-info');
+            const translationEntry = natTable.find(e => 
+                e.publicIP === NAT_PUBLIC_IP && 
+                e.publicPort === NAT_TRANSLATED_PORT
+            );
+
+            if (translationEntry) {
+                logMessage(`Match found! Static rule dictates forwarding to Private Host.`, 'log-nat-table');
+                await delay(1000);
+
+                // --- Packet is translated and forwarded to private network ---
+                logMessage(`\n--- STEP 3: NAT TRANSLATES & FORWARDS ---`, 'log-stage');
+                logMessage(`Packet Source is kept as ${PUBLIC_CLIENT_IP}:${PUBLIC_CLIENT_PORT}.`, 'log-info');
+                logMessage(`Packet Destination is rewritten to **${translationEntry.privateSrcIP}:${translationEntry.privateSrcPort}** (Private Host).`, 'log-info');
+                logMessage(`Packet sent (Source: ${PUBLIC_CLIENT_IP}:${PUBLIC_CLIENT_PORT}, Destination: ${PRIVATE_SERVER_IP}:${PRIVATE_SERVER_PORT})`, 'log-packet-out');
+                await delay(1500);
+
+                // --- Private Host receives and replies ---
+                logMessage(`\n--- STEP 4: PRIVATE HOST RECEIVES AND REPLIES ---`, 'log-stage');
+                logMessage(`Private Host (${PRIVATE_SERVER_IP}) processes the request and prepares a response.`, 'log-success');
+                logMessage(`Response Packet (Source: ${PRIVATE_SERVER_IP}:${PRIVATE_SERVER_PORT}, Destination: ${PUBLIC_CLIENT_IP}:${PUBLIC_CLIENT_PORT})`, 'log-packet-out');
+                await delay(1500);
+
+                // --- NAT Router receives outbound reply ---
+                logMessage(`\n--- STEP 5: NAT ROUTER RECEIVES OUTBOUND REPLY ---`, 'log-stage');
+                logMessage(`NAT Router receives the response from the Private Host.`, 'log-info');
+                await delay(1000);
+
+                // --- NAT Reverse Translation (Lookup) ---
+                logMessage(`NAT Router checks its Translation Table for the reverse path (Private Source: ${PRIVATE_SERVER_IP}:${PRIVATE_SERVER_PORT}).`, 'log-info');
+                
+                if (translationEntry) {
+                    logMessage(`Match found! Translating the Source IP for the public network.`, 'log-nat-table');
+                    await delay(1000);
+
+                    // --- Packet is reverse translated and sent to public network ---
+                    logMessage(`\n--- STEP 6: NAT REVERSE TRANSLATES & SENDS ---`, 'log-stage');
+                    logMessage(`Response Source IP is rewritten to **${NAT_PUBLIC_IP}:${NAT_TRANSLATED_PORT}** (NAT Public Interface).`, 'log-info');
+                    logMessage(`Response Destination is kept as ${PUBLIC_CLIENT_IP}:${PUBLIC_CLIENT_PORT}.`, 'log-info');
+                    logMessage(`Packet sent to Public Client (Source: ${NAT_PUBLIC_IP}:${NAT_TRANSLATED_PORT}, Destination: ${PUBLIC_CLIENT_IP}:${PUBLIC_CLIENT_PORT})`, 'log-packet-in');
+                    await delay(1500);
+
+                    logMessage(`\n--- SIMULATION COMPLETE ---`, 'log-success');
+                    logMessage(`The Public Client receives the response, believing it communicated directly with ${NAT_PUBLIC_IP}:${NAT_TRANSLATED_PORT}.`, 'log-success');
+
+                } else {
+                    logMessage(`Error: Reverse translation entry not found! Dropping packet.`, 'log-error');
+                }
+
+            } else {
+                logMessage(`Error: No matching Port Forwarding rule found for ${NAT_PUBLIC_IP}:${NAT_TRANSLATED_PORT}! Packet dropped.`, 'log-error');
+            }
+
+
+            startBtn.disabled = false;
+        }
+
+        // Initialize on load
+        window.onload = function() {
+            renderNatTable();
+        };
+
+    </script>
+</body>
+</html>

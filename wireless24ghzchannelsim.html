@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>802.11 2.4GHz Channel Overlap Simulator</title>
+    <!-- Load Tailwind CSS for modern styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Consolas', 'Courier New', monospace;
+            background: linear-gradient(180deg, #353636 50%, #032a36 75%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        a {
+            display: block;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            text-align: center;
+        }
+        .container-card {
+            background-color: rgb(141, 141, 141);
+            border-radius: 1rem;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.08);
+            padding: 2rem;
+            max-width: 1200px;
+            margin: auto;
+        }
+        .spectrum-container {
+            position: relative;
+            height: 300px; /* Fixed height for the spectrum display */
+            border: 1px solid #d1d5db;
+            border-radius: 0.5rem;
+            margin-top: 2rem;
+            background-color: #f9fafb;
+        }
+        .frequency-axis {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 10px;
+            font-size: 0.75rem;
+            color: #4b5563;
+        }
+        .channel-block {
+            position: absolute;
+            height: 150px; /* Fixed height for visualization */
+            top: 50px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            border-radius: 0.5rem;
+            opacity: 0.7;
+            text-align: center;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: white;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .channel-block.non-overlapping {
+            background-color: #059669; /* Emerald Green */
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .channel-block.overlapping {
+            background-color: #f59e0b; /* Amber/Orange */
+            transform: translateY(20px); /* Lowered for visual separation */
+            z-index: 10;
+        }
+        .channel-block:hover {
+            opacity: 1;
+            z-index: 20;
+            transform: scale(1.05) translateY(-5px);
+        }
+        .channel-label {
+            position: absolute;
+            width: 100%;
+            text-align: center;
+            top: 5px;
+        }
+        .channel-freq {
+            position: absolute;
+            width: 100%;
+            text-align: center;
+            bottom: 5px;
+            font-size: 0.7rem;
+            font-weight: 400;
+        }
+        .log-box {
+            min-height: 120px;
+            background-color: #1f2937;
+            color: #e5e7eb;
+            font-family: 'Consolas', 'Courier New', monospace;
+            border-radius: 0.75rem;
+            padding: 1rem;
+            overflow-y: auto;
+            font-size: 0.85rem;
+        }
+        .log-info { color: #60a5fa; }
+        .log-success { color: #34d399; }
+        .log-error { color: #f87171; }
+
+        /* Custom animation for selection pulse */
+        @keyframes pulse-ring {
+            0% { transform: scale(0.3); opacity: 0.8; }
+            100% { transform: scale(1.5); opacity: 0; }
+        }
+
+        .selected-pulse {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 0.5rem;
+            background: rgba(239, 68, 68, 0.5); /* Red */
+            animation: pulse-ring 0.8s ease-out;
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        /* Tooltip for hover */
+        .tooltip-text {
+            visibility: hidden;
+            width: 120px;
+            background-color: #333;
+            color: #fff;
+            text-align: center;
+            border-radius: 6px;
+            padding: 5px 0;
+            position: absolute;
+            z-index: 100;
+            bottom: 100%;
+            left: 50%;
+            margin-left: -60px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .channel-block:hover .tooltip-text {
+            visibility: visible;
+            opacity: 1;
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+
+    <div class="container-card">
+        <h1 class="text-3xl font-extrabold text-orange-500 mb-2 text-center">
+            802.11 2.4 GHz Channel Overlap Simulator
+        </h1>
+        <p class="text-center text-white mb-8 max-w-4xl mx-auto">
+            The 2.4 GHz band has 11 channels, but only channels 1, 6, and 11 are non-overlapping (20 MHz bandwidth). Click any channel to see its center frequency and how much it overlaps with others.
+        </p>
+        <p class="text-sm text-yellow-500 mb-8 text-center">
+            Press F5 or Reload/Refresh Browser to Reset Simulation.
+        </p>
+        <a id="link" class="text-sm hover:text-lime-500 text-yellow-200 mb-8 text-center" href="index.html">
+            Back to Simulations Index
+        </a>
+
+        <!-- Spectrum Visualization -->
+        <div class="spectrum-container" id="spectrum-container">
+            <div class="frequency-axis">
+                <span>2.400 GHz</span>
+                <span>2.430 GHz (Center)</span>
+                <span>2.460 GHz</span>
+            </div>
+            <!-- Channel blocks will be injected here -->
+        </div>
+        
+
+        <!-- Controls and Interaction Area -->
+        <div class="mt-8 flex flex-col md:flex-row justify-between items-center bg-gray-50 p-4 rounded-lg shadow-inner">
+            <div class="flex items-center space-x-4 mb-4 md:mb-0">
+                <span class="font-bold text-lg text-gray-800">Selected Channel:</span>
+                <span id="selected-channel-display" class="text-2xl font-extrabold text-red-600">--</span>
+            </div>
+            <div class="flex space-x-4 text-sm">
+                <div class="flex items-center">
+                    <span class="w-4 h-4 mr-2 bg-059669 rounded-full"></span> Non-Overlapping (1, 6, 11)
+                </div>
+                <div class="flex items-center">
+                    <span class="w-4 h-4 mr-2 bg-f59e0b rounded-full"></span> Overlapping (2, 3, 4, 5, etc.)
+                </div>
+            </div>
+        </div>
+
+        <h3 class="text-xl font-semibold text-gray-800 mt-8 mb-3">Simulation Log & Interference Check</h3>
+        <div id="sim-log" class="log-box">
+            <p class="log-info">// Click a channel block in the diagram above to analyze its interference potential.</p>
+        </div>
+    </div>
+
+    <script>
+        // Define all 2.4 GHz channels (US/FCC standard 1-11)
+        // Center Frequency = 2407 + (5 * Channel Number)
+        const CHANNELS = [
+            { channel: 1, freq: 2412, isSafe: true },
+            { channel: 2, freq: 2417, isSafe: false },
+            { channel: 3, freq: 2422, isSafe: false },
+            { channel: 4, freq: 2427, isSafe: false },
+            { channel: 5, freq: 2432, isSafe: false },
+            { channel: 6, freq: 2437, isSafe: true },
+            { channel: 7, freq: 2442, isSafe: false },
+            { channel: 8, freq: 2447, isSafe: false },
+            { channel: 9, freq: 2452, isSafe: false },
+            { channel: 10, freq: 2457, isSafe: false },
+            { channel: 11, freq: 2462, isSafe: true },
+        ];
+        
+        const BANDWIDTH = 20; // 802.11n/g/b standard bandwidth in 2.4 GHz
+        const OVERLAP_THRESHOLD = 10; // 10 MHz of overlap (half of a channel's width)
+
+        const spectrumContainer = document.getElementById('spectrum-container');
+        const logElement = document.getElementById('sim-log');
+        const selectedChannelDisplay = document.getElementById('selected-channel-display');
+
+        // Spectrum coordinates (2400 MHz to 2470 MHz range visualization)
+        const START_FREQ = 2400; // MHz
+        const END_FREQ = 2470;   // MHz
+        const TOTAL_RANGE = END_FREQ - START_FREQ;
+
+        // --- Utility Functions ---
+
+        function log(message, type = 'log-info') {
+            logElement.innerHTML += `<span class="${type}">${message}</span>\n`;
+            logElement.scrollTop = logElement.scrollHeight;
+        }
+
+        function clearLog() {
+            logElement.innerHTML = '';
+        }
+
+        // --- Core Logic: Visualization and Overlap ---
+
+        /**
+         * Calculates the position and width of a channel block on the visual spectrum.
+         * @param {number} centerFreq The channel's center frequency.
+         * @returns {object} { left: CSS left%, width: CSS width% }
+         */
+        function calculateChannelPosition(centerFreq) {
+            // A 20 MHz channel extends 10 MHz below and 10 MHz above its center frequency.
+            const channelStart = centerFreq - (BANDWIDTH / 2);
+            const channelEnd = centerFreq + (BANDWIDTH / 2);
+
+            // Calculate position relative to the TOTAL_RANGE (70 MHz)
+            const left = ((channelStart - START_FREQ) / TOTAL_RANGE) * 100;
+            const width = (BANDWIDTH / TOTAL_RANGE) * 100;
+
+            return { left, width };
+        }
+
+        /**
+         * Checks if two channels overlap based on their center frequencies.
+         * Two 20MHz channels overlap if their center frequencies are less than 20MHz apart.
+         * @param {number} freqA Center frequency of channel A.
+         * @param {number} freqB Center frequency of channel B.
+         * @returns {boolean} True if they overlap, false otherwise.
+         */
+        function checkOverlap(freqA, freqB) {
+            return Math.abs(freqA - freqB) < BANDWIDTH;
+        }
+
+
+        // --- UI Rendering ---
+
+        function renderSpectrum() {
+            spectrumContainer.innerHTML = '<div class="frequency-axis"><span>2.400 GHz</span><span>2.430 GHz (Center)</span><span>2.470 GHz</span></div>';
+            
+            CHANNELS.forEach(c => {
+                const { left, width } = calculateChannelPosition(c.freq);
+                const className = c.isSafe ? 'non-overlapping' : 'overlapping';
+                
+                const block = document.createElement('div');
+                block.id = `ch-block-${c.channel}`;
+                block.className = `channel-block ${className}`;
+                block.style.left = `${left}%`;
+                block.style.width = `${width}%`;
+                block.style.height = `${150 - (c.channel % 3) * 10}px`; // Slight height variation for visual appeal
+                block.dataset.channel = c.channel;
+                block.onclick = () => selectChannel(c.channel);
+
+                block.innerHTML = `
+                    <div class="channel-label">CH ${c.channel}</div>
+                    <div class="channel-freq">${c.freq} MHz</div>
+                    <span class="tooltip-text">${c.isSafe ? 'Non-Overlapping' : 'Overlapping'}</span>
+                `;
+
+                spectrumContainer.appendChild(block);
+            });
+        }
+
+        // --- Interaction Logic ---
+
+        function selectChannel(channelNumber) {
+            const selectedChannel = CHANNELS.find(c => c.channel === channelNumber);
+            
+            // Clear previous selection and log
+            CHANNELS.forEach(c => {
+                const block = document.getElementById(`ch-block-${c.channel}`);
+                if (block) {
+                    block.classList.remove('ring-4', 'ring-red-400', 'ring-offset-2');
+                    const pulse = block.querySelector('.selected-pulse');
+                    if (pulse) pulse.remove();
+                }
+            });
+            clearLog();
+            
+            // Highlight the new selection with a pulse effect
+            const block = document.getElementById(`ch-block-${channelNumber}`);
+            if (block) {
+                block.classList.add('ring-4', 'ring-red-400', 'ring-offset-2');
+                const pulse = document.createElement('div');
+                pulse.className = 'selected-pulse';
+                block.appendChild(pulse);
+                // Remove pulse after animation completes
+                setTimeout(() => pulse.remove(), 800);
+            }
+            
+            selectedChannelDisplay.textContent = channelNumber;
+
+            log(`// ANALYSIS: Channel ${channelNumber} (${selectedChannel.freq} MHz Center)`, 'log-info');
+            
+            if (selectedChannel.isSafe) {
+                log(`- STATUS: NON-OVERLAPPING. This channel does not share bandwidth with CH 1, CH 6, or CH 11.`, 'log-success');
+                log(`- RECOMMENDED USE: Highly recommended for deployment. Allows 3 access points (AP) to operate at full power without adjacent channel interference.`, 'log-info');
+            } else {
+                log(`- STATUS: OVERLAPPING. This channel severely overlaps with adjacent channels.`, 'log-error');
+                log(`- RECOMMENDED USE: AVOID! Using this channel will cause Co-Channel Interference (CCI) and Adjacent Channel Interference (ACI), drastically reducing performance.`, 'log-error');
+            }
+
+            log(`\n// Interference Check (20 MHz Bandwidth):`, 'log-info');
+
+            let overlappingChannels = [];
+            CHANNELS.forEach(otherChannel => {
+                if (otherChannel.channel !== channelNumber) {
+                    const overlap = checkOverlap(selectedChannel.freq, otherChannel.freq);
+                    if (overlap) {
+                        overlappingChannels.push(otherChannel.channel);
+                    }
+                }
+            });
+
+            if (overlappingChannels.length > 0) {
+                log(`- Channels that OVERLAP with CH ${channelNumber}: ${overlappingChannels.join(', ')}`, 'log-error');
+            } else {
+                log(`- Channels that OVERLAP with CH ${channelNumber}: None (This should only happen for CH 1, 6, 11 relative to each other).`, 'log-success');
+            }
+        }
+
+        // Initialize the simulator
+        window.onload = () => {
+            renderSpectrum();
+            // Start with a non-overlapping channel selected for demonstration
+            selectChannel(6); 
+        };
+    </script>
+</body>
+</html>

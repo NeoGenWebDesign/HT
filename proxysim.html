@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Proxy Server Simulation</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Consolas', 'Courier New', monospace;
+            background: linear-gradient(180deg, #353636 50%, #032a36 75%);
+            min-height: 100vh;
+        }
+        a {
+            display: block;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            text-align: center;
+        }
+        .container-card {
+            background-color: white;
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+            padding: 2rem;
+        }
+        .console-output {
+            background-color: #1a202c; /* Dark console background */
+            color: #48bb78; /* Green text for visibility */
+            font-family: 'Consolas', 'Courier New', monospace;
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            min-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            line-height: 1.5;
+            text-align: left;
+            font-size: small;
+        }
+        .log-client { color: #90cdf4; /* Light Blue */ }
+        .log-proxy { color: #f6e05e; /* Yellow */ }
+        .log-server { color: #fc8181; /* Red/Coral */ }
+        .log-cache { color: #805ad5; /* Purple */ }
+        .log-info { color: #a0aec0; /* Gray */ }
+        .log-step { font-weight: bold; margin-top: 0.5rem; padding-top: 0.25rem; border-top: 1px dashed #2d3748; }
+    </style>
+</head>
+<body class="p-4 md:p-10 min-h-screen">
+
+    <div class="max-w-7xl mx-auto">
+        <h1 class="text-4xl font-extrabold text-orange-500 mb-2 text-center">
+            Proxy Server Workflow Simulator
+        </h1>
+        <p class="text-lg text-white mb-8 text-center">
+            Simulating the connection from a Client to an Origin Server through an intermediary Proxy.
+        </p>
+        <p class="text-sm text-yellow-500 mb-8 text-center">
+            Press F5 or Reload/Refresh Browser to Reset Simulation.
+        </p>
+        <a id="link" class="text-sm hover:text-lime-500 text-yellow-200 mb-8 text-center" href="index.html">
+            Back to Simulations Index
+        </a>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+            
+            <!-- Control Panel & Explanation -->
+            <div class="container-card">
+                <h3 class="text-2xl font-bold text-gray-800 mb-4">Request Controls</h3>
+
+                <label for="targetSite" class="block text-sm font-medium text-gray-700 mb-2">
+                    1. Target Website
+                </label>
+                <select id="targetSite" 
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 mb-4 font-mono text-base">
+                    <option value="news.com">news.com (Often Requested)</option>
+                    <option value="api.weather.org">api.weather.org (New Request)</option>
+                    <option value="images.stock.co">images.stock.co (Large Content)</option>
+                </select>
+
+                <label for="clientIP" class="block text-sm font-medium text-gray-700 mb-2">
+                    2. Simulated Client IP Address
+                </label>
+                <input type="text" id="clientIP" value="192.168.1.10" 
+                       class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 mb-6 font-mono text-base">
+
+                <button id="run-btn" onclick="runSimulation()" 
+                        class="w-full bg-rose-500 hover:bg-rose-800 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-150">
+                    Send Request via Proxy
+                </button>
+
+                <div class="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                    <p class="font-bold text-blue-800">Key Proxy Functions Illustrated:</p>
+                    <ul class="list-disc list-inside text-sm text-blue-700 mt-2">
+                        <li>**Caching:** Accelerates requests by serving cached content directly.</li>
+                        <li>**Anonymity/Security:** Hides the Client's IP from the Origin Server.</li>
+                        <li>**Filtering:** Can enforce rules (not explicitly shown, but implied in the proxy logic).</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <!-- Console Output -->
+            <div class="container-card p-1">
+                <h3 class="text-2xl font-bold text-gray-800 px-6 pt-6">Simulation Console Log</h3>
+                <div id="console" class="console-output">
+                    Waiting for initial request...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Global Simulation State ---
+        // Simulated Proxy Server Cache (Key: URL, Value: Content)
+        let proxyCache = {
+            'news.com': {
+                content: '<html>News Headlines for 11/2025</html>',
+                lastFetched: Date.now() - 3600000 // 1 hour ago (simulates old content)
+            },
+            'images.stock.co': {
+                content: '[Binary data for a 5MB image]',
+                lastFetched: Date.now() 
+            }
+        };
+
+        const PROXY_IP = '203.0.113.1'; // The IP the Origin Server sees
+        const CACHE_TTL = 1000 * 60 * 60; // Cache Time-To-Live: 1 hour (for demonstration)
+
+        const consoleOutput = document.getElementById('console');
+
+        /** Helper function to log messages to the console with styling */
+        function log(message, type = 'log-info') {
+            const time = new Date().toLocaleTimeString('en-US', { hour12: false });
+            consoleOutput.innerHTML += `[${time}] <span class="${type}">${message}</span>\n`;
+            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+        }
+
+        /** Simulates the Origin Web Server */
+        function originServer(url, sourceIP) {
+            log(`- Request received at Origin Server (${url}).`, 'log-server');
+            log(`- The Source IP is: ${sourceIP}. (Client's IP is masked!)`, 'log-server');
+
+            // Simulate delay for fetching fresh content
+            const fetchDelay = (url === 'images.stock.co') ? 1500 : 500;
+            return new Promise(resolve => {
+                setTimeout(() => {
+                    const freshContent = `<html>Fresh content for ${url}, fetched at ${new Date().toISOString()}</html>`;
+                    log(`- Server generating fresh response for ${url}.`, 'log-server');
+                    resolve({
+                        status: 200,
+                        data: freshContent,
+                        delay: fetchDelay
+                    });
+                }, fetchDelay);
+            });
+        }
+
+        /** Simulates the Forward Proxy Server */
+        async function forwardProxy(url, clientIP) {
+            log(`\n--- STEP 2: PROXY INTERCEPTION ---`, 'log-step');
+            log(`+ Proxy receives request from Client IP: ${clientIP}`, 'log-proxy');
+            
+            // 1. Check Cache
+            const cachedItem = proxyCache[url];
+            const isStale = cachedItem && (Date.now() - cachedItem.lastFetched > CACHE_TTL);
+
+            if (cachedItem && !isStale) {
+                // Cache Hit (Fresh)
+                log(`+ Cache HIT! Content for ${url} is fresh. Serving immediately.`, 'log-cache');
+                log(`+ NO external request needed. Anonymity preserved (Proxy did not contact server).`, 'log-cache');
+                
+                // Return cached data
+                return { 
+                    status: 200, 
+                    data: cachedItem.content, 
+                    source: 'Cache', 
+                    delay: 100 
+                };
+
+            } else {
+                // Cache Miss or Stale
+                if (isStale) {
+                    log(`+ Cache MISS/STALE. Content for ${url} is expired.`, 'log-proxy');
+                } else {
+                    log(`+ Cache MISS. First time fetching ${url}.`, 'log-proxy');
+                }
+
+                // 2. Forward Request
+                log(`+ Forwarding request to Origin Server. Source IP translated from ${clientIP} to ${PROXY_IP}`, 'log-proxy');
+
+                // 3. Get response from server
+                const serverResponse = await originServer(url, PROXY_IP);
+                
+                // 4. Cache the new content
+                proxyCache[url] = {
+                    content: serverResponse.data,
+                    lastFetched: Date.now()
+                };
+                log(`+ Caching fresh content for ${url} for future requests.`, 'log-cache');
+
+                // Return server data
+                return { 
+                    status: serverResponse.status, 
+                    data: serverResponse.data, 
+                    source: 'Origin Server', 
+                    delay: serverResponse.delay 
+                };
+            }
+        }
+
+        /** Main execution function */
+        async function runSimulation() {
+            consoleOutput.innerHTML = ''; // Clear console
+            const url = document.getElementById('targetSite').value;
+            const clientIP = document.getElementById('clientIP').value.trim();
+
+            // --- STEP 1: CLIENT REQUEST ---
+            log(`\n--- STEP 1: CLIENT INITIATES REQUEST ---`, 'log-step');
+            log(`> Client (${clientIP}) sends request for: ${url}`, 'log-client');
+            log(`> Request is routed to the configured Proxy Server (${PROXY_IP}).`, 'log-client');
+
+            // --- STEP 2 & 3: PROXY PROCESSING AND SERVER INTERACTION ---
+            const response = await forwardProxy(url, clientIP);
+
+            // --- STEP 4: PROXY SENDS RESPONSE BACK TO CLIENT ---
+            log(`\n--- STEP 4: PROXY SENDS RESPONSE ---`, 'log-step');
+            log(`+ Proxy sending response (Source: ${response.source}) back to Client (${clientIP}).`, 'log-proxy');
+            log(`+ Total latency was simulated at ~${response.delay}ms.`, 'log-proxy');
+            
+            // --- STEP 5: CLIENT RECEIVES CONTENT ---
+            log(`\n--- STEP 5: CLIENT RECEIVES CONTENT ---`, 'log-step');
+            log(`> Client receives HTTP 200 OK.`, 'log-client');
+            log(`> Content snippet: ${response.data.substring(0, 70)}...`, 'log-client');
+
+            log(`\n*** SIMULATION COMPLETE ***`, 'log-step');
+        }
+
+        // Initialize the console
+        document.addEventListener('DOMContentLoaded', () => {
+            log('Ready to start simulation. Select a site and click "Send Request via Proxy".', 'log-info');
+        });
+
+    </script>
+</body>
+</html>

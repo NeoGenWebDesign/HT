@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Switching Loop & Broadcast Storm Simulator</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Consolas', 'Courier New', monospace;
+            background: linear-gradient(180deg, #353636 50%, #032a36 75%);
+            min-height: 100vh;
+        }
+        a {
+            display: block;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            text-align: center;
+        }
+        .container-card {
+            background-color: white;
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+            padding: 2rem;
+        }
+        .vis-area {
+            position: relative;
+            height: 450px;
+            width: 100%;
+            margin-bottom: 2rem;
+        }
+        .switch, .host {
+            position: absolute;
+            width: 100px;
+            height: 100px;
+            border-radius: 0.75rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.875rem;
+            font-weight: bold;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+            z-index: 10;
+            border: 2px solid #3b82f6;
+        }
+        .switch {
+            background-color: #3b82f6; /* Blue */
+            color: white;
+        }
+        .host {
+            background-color: #10b981; /* Green */
+            color: white;
+            border-color: #10b981;
+        }
+        .link {
+            position: absolute;
+            height: 3px;
+            background-color: #94a3b8;
+            transform-origin: 0 0;
+            z-index: 5;
+        }
+        .link.active {
+            background-color: #f59e0b; /* Orange for active links */
+        }
+        .frame-packet {
+            position: absolute;
+            width: 15px;
+            height: 15px;
+            background-color: #ef4444; /* Red for frames */
+            border-radius: 50%;
+            z-index: 20;
+            opacity: 0;
+            transition: opacity 0.1s;
+        }
+        .storm-meter {
+            height: 30px;
+            width: 100%;
+            background-color: #e5e7eb;
+            border-radius: 0.5rem;
+            margin-top: 1rem;
+            overflow: hidden;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .storm-level {
+            height: 100%;
+            width: 0%;
+            background-color: #10b981;
+            transition: width 0.3s ease;
+            text-align: center;
+            color: white;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+        }
+        .critical {
+             background-color: #ef4444; /* Red */
+        }
+        .warning {
+            background-color: #f59e0b; /* Orange */
+        }
+        .safe {
+            background-color: #10b981; /* Green */
+        }
+
+        .console-log {
+            min-height: 150px;
+            background-color: #1f2937;
+            color: #d1d5db;
+            font-family: 'Consolas', 'Courier New', monospace;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            font-size: 0.85rem;
+        }
+        .log-broadcast { color: #fcd34d; }
+        .log-loop { color: #ef4444; font-weight: bold; }
+        .log-mac { color: #60a5fa; }
+    </style>
+</head>
+<body class="p-4 md:p-10 min-h-screen">
+
+    <div class="max-w-4xl mx-auto">
+        <h1 class="text-3xl font-extrabold text-orange-500 mb-2 text-center">
+            Switching Loop & Broadcast Storm Simulation
+        </h1>
+        <p class="text-lg text-white mb-6 text-center">
+            Observe the catastrophic effect of a Layer 2 switching loop on network performance.
+        </p>
+        <p class="text-sm text-yellow-500 mb-8 text-center">
+            Press F5 or Reload/Refresh Browser to Reset Simulation.
+        </p>
+        <a id="link" class="text-sm hover:text-lime-500 text-yellow-200 mb-8 text-center" href="index.html">
+            Back to Simulations Index
+        </a>
+
+        <div class="container-card">
+            <h3 class="text-xl font-semibold text-gray-800 mb-3">
+                The Problem: Redundancy Without Control
+            </h3>
+            <p class="text-sm text-gray-700 mb-4">
+                A switching loop occurs when there are multiple active paths between two devices in a switched network. While redundancy is good, without a mechanism like STP, it causes three major issues:
+                <ul class="list-disc list-inside ml-4 mt-1 text-sm">
+                    <li><span class="text-red-600 font-semibold">Broadcast Storm:</span> Broadcast frames (like ARP requests) are forwarded endlessly around the loop, consuming all available bandwidth.</li>
+                    <li><span class="text-red-600 font-semibold">MAC Address Table Instability:</span> A switch sees the same frame arrive from different ports, causing its MAC table to constantly change (flapping), leading to incorrect forwarding.</li>
+                    <li><span class="text-red-600 font-semibold">Multiple Frame Copies:</span> Destination hosts receive multiple identical copies of unicast frames.</li>
+                </ul>
+            </p>
+
+            <!-- Storm Meter -->
+            <div class="flex items-center space-x-4 mb-4">
+                <div class="text-lg font-bold text-gray-700">Broadcast Storm Level:</div>
+                <div class="storm-meter flex-grow">
+                    <div id="storm-level" class="storm-level safe">0%</div>
+                </div>
+            </div>
+
+
+            <!-- Simulation Area -->
+            <div id="loop-vis" class="vis-area">
+                <!-- Switches, Hosts, and Links injected here -->
+            </div>
+
+            <div class="flex justify-center space-x-4 mb-6">
+                <button onclick="startLoop()" id="start-btn"
+                        class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg shadow-xl transition duration-150 text-center text-sm disabled:opacity-50">
+                    START BROADCAST STORM
+                </button>
+                <button onclick="resetSimulation()" id="reset-btn" disabled
+                        class="bg-gray-400 hover:bg-gray-500 text-white font-bold py-3 px-6 rounded-lg shadow-xl transition duration-150 text-center text-sm disabled:opacity-50">
+                    Reset
+                </button>
+            </div>
+
+            <h3 class="text-xl font-semibold text-gray-800 mb-3">Simulation Log (Packet Forwarding & MAC Table)</h3>
+            <div id="loop-log" class="console-log">
+                <p class="log-mac">Setup: 2 Switches (SW1, SW2) connected in a loop with Host A.</p>
+                <p class="log-mac">The goal is to send a broadcast frame (Source: Host A, Destination: FFFF.FFFF.FFFF) to demonstrate loop behavior.</p>
+                <p class="log-mac">Wait for the simulation to start...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const FRAME_LIMIT = 50; // Max frames to simulate before stopping
+        const LOOP_TOPOLOGY = {
+            HostA: { id: 'HostA', mac: '00:01', x: 200, y: 350, type: 'host', links: ['SW1'] },
+            SW1: { id: 'SW1', mac: '00:1A', x: 200, y: 150, type: 'switch', links: ['HostA', 'SW2'] },
+            SW2: { id: 'SW2', mac: '00:2B', x: 600, y: 150, type: 'switch', links: ['SW1', 'SW1'] } // SW2 connects back to SW1, simulating two links between them (a loop)
+        };
+        const SW_IDS = Object.keys(LOOP_TOPOLOGY).filter(k => LOOP_TOPOLOGY[k].type === 'switch');
+        
+        let animationFrameCount = 0;
+        let isRunning = false;
+        let activeFrames = []; // Stores frame objects {id, origin, destination, pathIndex}
+        let switchMacTables = {
+            'SW1': { '00:01': 'P1' }, // P1 connects to HostA
+            'SW2': {} 
+        };
+        let macTableFlapCount = 0;
+
+        // --- Utility Functions ---
+
+        /** Logs a message to the console element */
+        function log(message, type = '') {
+            const consoleEl = document.getElementById('loop-log');
+            consoleEl.innerHTML += `<span class="${type}">${message}</span>\n`;
+            consoleEl.scrollTop = consoleEl.scrollHeight;
+        }
+
+        /** Clears and draws the network topology */
+        function initializeVisualization() {
+            const container = document.getElementById('loop-vis');
+            container.innerHTML = '';
+            const { width, height } = container.getBoundingClientRect();
+            
+            const scaleX = width / 800;
+            const scaleY = height / 450; 
+
+            // 1. Draw Links
+            // Explicitly defining links since SW1-SW2 link is redundant
+            drawLink('HostA', 'SW1', scaleX, scaleY, container, 'Link-A-1');
+            drawLink('SW1', 'SW2', scaleX, scaleY, container, 'Link-1-2-Top');
+            drawLink('SW2', 'SW1', scaleX, scaleY, container, 'Link-2-1-Bottom', true); // Draw a separate, looped path
+
+            // 2. Draw Nodes
+            Object.keys(LOOP_TOPOLOGY).forEach(id => {
+                const data = LOOP_TOPOLOGY[id];
+                const x = data.x * scaleX;
+                const y = data.y * scaleY;
+                
+                const el = document.createElement('div');
+                el.className = data.type;
+                el.id = id;
+                el.style.left = `${x - 50}px`; 
+                el.style.top = `${y - 50}px`; 
+                el.innerHTML = `
+                    <div class="text-xl">${id}</div>
+                    <div class="text-xs">MAC: ${data.mac}</div>
+                    ${data.type === 'switch' ? '<div class="text-xs text-yellow-300">MAC Table: Check Log</div>' : ''}
+                `;
+                container.appendChild(el);
+            });
+        }
+        
+        /** Draws a connection line between two nodes */
+        function drawLink(id1, id2, scaleX, scaleY, container, linkId, isLoopPath = false) {
+            const start = { x: LOOP_TOPOLOGY[id1].x * scaleX, y: LOOP_TOPOLOGY[id1].y * scaleY };
+            let end = { x: LOOP_TOPOLOGY[id2].x * scaleX, y: LOOP_TOPOLOGY[id2].y * scaleY };
+            
+            // Adjust coordinates slightly for the looped path visualization
+            if (isLoopPath) {
+                const midX = (start.x + end.x) / 2;
+                const midY = (start.y + end.y) / 2 + 50; // Bend the loop path downward
+                start = { x: start.x + 50, y: start.y + 10 };
+                end = { x: end.x - 50, y: end.y + 10 };
+                // Using a simple line approximation here for visualization, or could use SVG for curves
+                
+                // For simplicity in this demo, we'll draw two separate lines slightly offset
+                start.y += 15; 
+                end.y += 15;
+            } else if (linkId === 'Link-1-2-Top') {
+                start.y -= 15;
+                end.y -= 15;
+            }
+
+            const dx = end.x - start.x;
+            const dy = end.y - start.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+            
+            const linkEl = document.createElement('div');
+            linkEl.className = 'link active';
+            linkEl.id = linkId;
+            linkEl.dataset.from = id1;
+            linkEl.dataset.to = id2;
+            linkEl.style.width = `${distance}px`;
+            linkEl.style.left = `${start.x}px`;
+            linkEl.style.top = `${start.y}px`;
+            linkEl.style.transform = `rotate(${angle}deg)`;
+            
+            container.appendChild(linkEl);
+        }
+
+        /** Creates a visual frame element */
+        function createFrame(linkId, initialDirection = 'forward') {
+            const linkEl = document.getElementById(linkId);
+            if (!linkEl) return;
+            
+            const linkRect = linkEl.getBoundingClientRect();
+            const containerRect = document.getElementById('loop-vis').getBoundingClientRect();
+            
+            const xOffset = linkRect.left - containerRect.left;
+            const yOffset = linkRect.top - containerRect.top;
+
+            const frameEl = document.createElement('div');
+            const frameId = `frame-${Date.now()}-${Math.random()}`;
+            frameEl.className = 'frame-packet';
+            frameEl.id = frameId;
+            frameEl.style.left = `${xOffset}px`;
+            frameEl.style.top = `${yOffset}px`;
+            frameEl.style.opacity = '1';
+
+            document.getElementById('loop-vis').appendChild(frameEl);
+            
+            const frame = {
+                id: frameId,
+                element: frameEl,
+                linkId: linkId,
+                start: { x: xOffset, y: yOffset },
+                progress: 0,
+                direction: initialDirection, // 'forward' or 'backward'
+                path: [linkEl.dataset.from, linkEl.dataset.to] // [SourceNode, DestinationNode]
+            };
+            activeFrames.push(frame);
+            return frame;
+        }
+
+        /** Broadcasts a frame from the source node */
+        function sendBroadcast(sourceId, mac) {
+            log(`[${animationFrameCount}] ${sourceId} sends BROADCAST frame (Src MAC: ${mac}, Dest: FFFF.FFFF.FFFF)`, 'log-broadcast');
+            
+            // Host A -> SW1 (Link-A-1)
+            createFrame('Link-A-1', 'forward');
+        }
+
+        // --- Loop Simulation Logic ---
+
+        function updateStormLevel() {
+            const levelEl = document.getElementById('storm-level');
+            const percentage = Math.min(100, Math.round((animationFrameCount / FRAME_LIMIT) * 100));
+            
+            levelEl.style.width = `${percentage}%`;
+            levelEl.textContent = `${percentage}%`;
+
+            levelEl.classList.remove('safe', 'warning', 'critical');
+            if (percentage < 33) {
+                 levelEl.classList.add('safe');
+            } else if (percentage < 70) {
+                 levelEl.classList.add('warning');
+            } else {
+                 levelEl.classList.add('critical');
+            }
+
+            if (percentage >= 100) {
+                log(`!!! BROADCAST STORM CRITICAL !!! Frames are consuming all resources.`, 'log-loop');
+                stopLoop();
+            }
+        }
+
+        function switchFrame(frame) {
+            const currentLink = document.getElementById(frame.linkId);
+            const currentNodeId = frame.path[frame.direction === 'forward' ? 1 : 0];
+            const nextNodeId = frame.path[frame.direction === 'forward' ? 0 : 1];
+            
+            if (currentNodeId === nextNodeId) return; // Ignore if frame is still on a link
+
+            // --- MAC Address Learning ---
+            const sourceMac = LOOP_TOPOLOGY[frame.path[0]].mac;
+            const receivingPort = getPortFromLink(frame.linkId, currentNodeId);
+            
+            if (switchMacTables[currentNodeId]) {
+                const oldPort = switchMacTables[currentNodeId][sourceMac];
+                if (oldPort && oldPort !== receivingPort) {
+                    macTableFlapCount++;
+                    log(`[${animationFrameCount}] ${currentNodeId}: MAC Flap! ${sourceMac} moved from ${oldPort} to ${receivingPort}`, 'log-loop');
+                }
+                switchMacTables[currentNodeId][sourceMac] = receivingPort;
+                log(`[${animationFrameCount}] ${currentNodeId}: Learned MAC ${sourceMac} on ${receivingPort}`, 'log-mac');
+            }
+            
+            // --- Broadcast Forwarding ---
+            // Broadcast frames must be forwarded out all ports *except* the ingress port.
+            if (currentNodeId === 'SW1') {
+                // SW1 receives frame from HostA (P1)
+                if (frame.linkId === 'Link-A-1') {
+                    // Forward out P2 (Top link to SW2) and P3 (Bottom link to SW2)
+                    log(`[${animationFrameCount}] SW1: Flooding Broadcast to Link 1-2 (Top) and Link 2-1 (Bottom)`, 'log-broadcast');
+                    createFrame('Link-1-2-Top', 'forward'); // New frame 1
+                    createFrame('Link-2-1-Bottom', 'backward'); // New frame 2 (using backward to denote direction visually)
+                }
+                // SW1 receives frame from SW2 (Top link)
+                else if (frame.linkId === 'Link-1-2-Top') {
+                    // Forward out P1 (to HostA) and P3 (Bottom link to SW2)
+                    log(`[${animationFrameCount}] SW1: Flooding Broadcast received on Top link. Creates 2 new frames.`, 'log-loop');
+                    createFrame('Link-A-1', 'backward'); // New frame 1 (moving towards HostA)
+                    createFrame('Link-2-1-Bottom', 'backward'); // New frame 2
+                }
+                // SW1 receives frame from SW2 (Bottom link)
+                else if (frame.linkId === 'Link-2-1-Bottom') {
+                    // Forward out P1 (to HostA) and P2 (Top link to SW2)
+                    log(`[${animationFrameCount}] SW1: Flooding Broadcast received on Bottom link. Creates 2 new frames.`, 'log-loop');
+                    createFrame('Link-A-1', 'backward'); // New frame 1
+                    createFrame('Link-1-2-Top', 'forward'); // New frame 2
+                }
+            }
+            else if (currentNodeId === 'SW2') {
+                 // SW2 receives frame from SW1 (Top link)
+                if (frame.linkId === 'Link-1-2-Top') {
+                    // Forward out P3 (Bottom link to SW1)
+                    log(`[${animationFrameCount}] SW2: Flooding Broadcast received on Top link. Creates 1 new frame.`, 'log-loop');
+                    createFrame('Link-2-1-Bottom', 'backward'); // New frame 1 (moving towards SW1)
+                }
+                 // SW2 receives frame from SW1 (Bottom link)
+                else if (frame.linkId === 'Link-2-1-Bottom') {
+                    // Forward out P2 (Top link to SW1)
+                    log(`[${animationFrameCount}] SW2: Flooding Broadcast received on Bottom link. Creates 1 new frame.`, 'log-loop');
+                    createFrame('Link-1-2-Top', 'forward'); // New frame 1 (moving towards SW1)
+                }
+            }
+
+            // Remove the original frame after it's processed by the switch
+            frame.element.remove();
+            activeFrames = activeFrames.filter(f => f.id !== frame.id);
+        }
+
+        // Helper to determine the logical port number for MAC learning visualization
+        function getPortFromLink(linkId, switchId) {
+            if (switchId === 'SW1') {
+                if (linkId === 'Link-A-1') return 'P1 (to HostA)';
+                if (linkId === 'Link-1-2-Top') return 'P2 (to SW2-Top)';
+                if (linkId === 'Link-2-1-Bottom') return 'P3 (to SW2-Bottom)';
+            }
+            if (switchId === 'SW2') {
+                if (linkId === 'Link-1-2-Top') return 'P2 (to SW1-Top)';
+                if (linkId === 'Link-2-1-Bottom') return 'P3 (to SW1-Bottom)';
+            }
+            return 'Unknown Port';
+        }
+
+        function animateLoop() {
+            if (!isRunning) return;
+
+            const newActiveFrames = [];
+            const speed = 0.05; // speed of packet movement
+            
+            activeFrames.forEach(frame => {
+                frame.progress += speed;
+                
+                const linkEl = document.getElementById(frame.linkId);
+                const linkRect = linkEl.getBoundingClientRect();
+                const containerRect = document.getElementById('loop-vis').getBoundingClientRect();
+                
+                const linkLength = parseFloat(linkEl.style.width);
+                const angle = parseFloat(linkEl.style.transform.match(/rotate\(([^)]+)/)[1]) * (Math.PI / 180);
+
+                let travelDistance = linkLength * frame.progress;
+                
+                if (frame.direction === 'backward') {
+                    // Start from the end and move back
+                    travelDistance = linkLength * (1 - frame.progress);
+                }
+                
+                // Calculate position based on the rotated link
+                const dx = Math.cos(angle) * travelDistance;
+                const dy = Math.sin(angle) * travelDistance;
+                
+                // Base position is the link's starting position (adjusted for container)
+                const baseX = parseFloat(linkEl.style.left);
+                const baseY = parseFloat(linkEl.style.top);
+                
+                frame.element.style.left = `${baseX + dx - 7.5}px`; // -7.5 to center packet
+                frame.element.style.top = `${baseY + dy - 7.5}px`;
+
+                // If frame reached the end of the link
+                if (frame.progress >= 1.0) {
+                    switchFrame(frame); // Process and potentially generate new frames
+                } else {
+                    newActiveFrames.push(frame);
+                }
+            });
+
+            activeFrames = newActiveFrames;
+            
+            // Check if we need to generate new frames (only on the initial step or when frames are actively looping)
+            if (animationFrameCount === 0) {
+                 sendBroadcast('HostA', LOOP_TOPOLOGY.HostA.mac);
+            }
+
+            animationFrameCount++;
+            updateStormLevel();
+            
+            if (isRunning) {
+                requestAnimationFrame(animateLoop);
+            }
+        }
+
+        function startLoop() {
+            if (isRunning) return;
+            isRunning = true;
+            document.getElementById('start-btn').disabled = true;
+            document.getElementById('start-btn').textContent = 'Loop Active...';
+            document.getElementById('reset-btn').disabled = false;
+            
+            // Clear log and MAC tables for fresh start
+            document.getElementById('loop-log').innerHTML = '';
+            macTableFlapCount = 0;
+            switchMacTables = {
+                'SW1': { '00:01': 'P1' }, 
+                'SW2': {} 
+            };
+            animationFrameCount = 0;
+            activeFrames = [];
+            
+            log('Simulation Started: Host A sends initial Broadcast Frame.', 'log-broadcast');
+            log('The loop path is SW1 <-> SW2 (via two physical links).', 'log-loop');
+            
+            animateLoop();
+        }
+
+        function stopLoop() {
+            isRunning = false;
+            document.getElementById('start-btn').textContent = 'STOPPED (Storm Critical)';
+        }
+
+        function resetSimulation() {
+            stopLoop();
+            animationFrameCount = 0;
+            activeFrames.forEach(f => f.element.remove());
+            activeFrames = [];
+            
+            document.getElementById('loop-log').innerHTML = '<p class="log-mac">Simulation Reset. Click START to begin the storm again.</p>';
+            document.getElementById('storm-level').style.width = '0%';
+            document.getElementById('storm-level').textContent = '0%';
+            document.getElementById('storm-level').className = 'storm-level safe';
+            
+            document.getElementById('start-btn').disabled = false;
+            document.getElementById('start-btn').textContent = 'START BROADCAST STORM';
+            document.getElementById('reset-btn').disabled = true;
+
+             initializeVisualization(); // Re-render initial state
+        }
+        
+        // --- Event Listeners and Initial Setup ---
+        
+        window.addEventListener('load', initializeVisualization);
+        window.addEventListener('resize', initializeVisualization);
+
+    </script>
+</body>
+</html>

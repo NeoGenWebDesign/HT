@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NTP Synchronization Simulator</title>
+    <!-- Load Tailwind CSS for modern styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Consolas', 'Courier New', monospace;
+            background: linear-gradient(180deg, #353636 50%, #032a36 75%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        a {
+            display: block;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            text-align: center;
+        }
+        .container-card {
+            background-color: rgb(184, 182, 182);
+            border-radius: 1rem;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.08);
+            padding: 2rem;
+            max-width: 1000px;
+            margin: auto;
+        }
+        .device {
+            width: 200px;
+            height: 120px;
+            background-color: #3b82f6; /* Blue */
+            border-radius: 0.5rem;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            z-index: 10;
+            position: relative;
+            padding: 1rem;
+        }
+        .server { background-color: #10b981; /* Green */ }
+
+        .vis-area {
+            position: relative;
+            height: 250px;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 5%;
+        }
+        .network-link {
+            position: absolute;
+            left: 210px;
+            right: 210px;
+            height: 4px;
+            background-color: #9ca3af;
+            border-radius: 2px;
+        }
+        .data-frame {
+            position: absolute;
+            padding: 5px 10px;
+            border-radius: 0.5rem;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: white;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+            z-index: 20;
+            opacity: 0;
+            text-align: center;
+        }
+        .frame-request { background-color: #f97316; /* Orange */ }
+        .frame-response { background-color: #ef4444; /* Red */ }
+
+        /* Log Styling */
+        .console-log {
+            min-height: 180px;
+            background-color: #1f2937;
+            color: #e5e7eb;
+            font-family: 'Consolas', 'Courier New', monospace;
+            border-radius: 0.75rem;
+            padding: 1rem;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            font-size: 0.85rem;
+        }
+        .log-time { color: #34d399; } /* Green for time stamps */
+        .log-calc { color: #60a5fa; } /* Blue for calculations */
+        .log-data { color: #facc15; } /* Yellow for key data */
+
+        /* Time Display */
+        .time-display {
+            font-size: 1.1rem;
+            font-weight: bold;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+
+    <div class="container-card">
+        <h1 class="text-3xl font-extrabold text-orange-500 mb-2 text-center">
+            NTP (Network Time Protocol) Simulation
+        </h1>
+        <p class="text-center text-white mb-8 max-w-3xl mx-auto">
+            NTP uses four critical timestamps to determine the most accurate time offset and network delay (latency) between a Client and a Server.
+        </p>
+        <p class="text-sm text-yellow-700 mb-8 text-center">
+            Press F5 or Reload/Refresh Browser to Reset Simulation.
+        </p>
+        <a id="link" class="text-sm hover:text-lime-500 text-yellow-200 mb-8 text-center" href="index.html">
+            Back to Simulations Index
+        </a>
+
+        <!-- Visualization Area -->
+        <div id="vis-area" class="vis-area">
+            <!-- Client -->
+            <div class="flex flex-col items-center">
+                <div class="text-lg font-semibold mb-2 text-blue-700">Client (Local Clock)</div>
+                <div id="client-device" class="device">
+                    Current Time:
+                    <div id="client-display" class="time-display">00:00:00.000</div>
+                    Client Offset: <span id="client-offset" class="text-yellow-400">0 ms</span>
+                </div>
+            </div>
+
+            <!-- Network Link -->
+            <div id="link" class="network-link"></div>
+
+            <!-- Server -->
+            <div class="flex flex-col items-center">
+                <div class="text-lg font-semibold mb-2 text-green-700">Server (Accurate Clock)</div>
+                <div id="server-device" class="device server">
+                    True Time:
+                    <div id="server-display" class="time-display">00:00:00.000</div>
+                    Server Delay: <span id="server-delay" class="text-yellow-400">0 ms</span>
+                </div>
+            </div>
+
+            <!-- Message Frames -->
+            <div id="msg-request" class="data-frame frame-request">T1</div>
+            <div id="msg-response" class="data-frame frame-response">T2, T3</div>
+        </div>
+        
+
+        <!-- Controls and Explanations -->
+        <div class="mt-4 flex flex-col md:flex-row justify-center space-y-4 md:space-y-0 md:space-x-4 mb-6">
+            <div class="flex items-center space-x-2 p-2 bg-gray-100 rounded-lg">
+                <label for="client-skew" class="font-medium text-gray-700">Client Skew (ms):</label>
+                <input type="number" id="client-skew" value="5000" min="0" max="10000" class="w-20 p-1 border rounded" />
+            </div>
+            <div class="flex items-center space-x-2 p-2 bg-gray-100 rounded-lg">
+                <label for="network-latency" class="font-medium text-gray-700">Network Latency (ms):</label>
+                <input type="number" id="network-latency" value="50" min="10" max="500" class="w-20 p-1 border rounded" />
+            </div>
+            <button onclick="startSynchronization()" id="start-btn"
+                    class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg shadow-xl transition duration-150 text-base disabled:opacity-50">
+                Start Synchronization
+            </button>
+        </div>
+
+        <h3 class="text-xl font-semibold text-gray-800 mb-3">NTP Protocol Log & Calculations</h3>
+        <div id="sim-log" class="console-log">
+            <p class="log-status">// Set the Client Skew (how much the Client's clock is off) and Network Latency, then click 'Start Synchronization'.</p>
+        </div>
+    </div>
+
+    <script>
+        // --- Configuration and State ---
+        let startTime = new Date().getTime();
+        let clientSkewMs = 5000; // How far the client's clock is ahead/behind (5 seconds fast initially)
+        let networkLatencyMs = 50; // One-way network delay (25ms)
+        let currentClientTime = 0;
+        let isRunning = false;
+
+        const elements = {
+            clientDisplay: document.getElementById('client-display'),
+            serverDisplay: document.getElementById('server-display'),
+            clientOffsetDisplay: document.getElementById('client-offset'),
+            serverDelayDisplay: document.getElementById('server-delay'),
+            log: document.getElementById('sim-log'),
+            startBtn: document.getElementById('start-btn'),
+            clientSkewInput: document.getElementById('client-skew'),
+            networkLatencyInput: document.getElementById('network-latency'),
+            msgRequest: document.getElementById('msg-request'),
+            msgResponse: document.getElementById('msg-response'),
+        };
+
+        // --- Utility Functions ---
+
+        /** Simulates the client's local time (which is skewed) */
+        function getClientSimulatedTime() {
+            const trueTime = new Date().getTime() - startTime;
+            // The client's clock runs faster/slower than the true time
+            return trueTime + clientSkewMs;
+        }
+
+        /** Gets the true server time */
+        function getServerTrueTime() {
+            return new Date().getTime() - startTime;
+        }
+
+        function msToTime(durationMs) {
+            const ms = Math.floor(durationMs % 1000).toString().padStart(3, '0');
+            const seconds = Math.floor((durationMs / 1000) % 60).toString().padStart(2, '0');
+            const minutes = Math.floor((durationMs / (1000 * 60)) % 60).toString().padStart(2, '0');
+            return `${minutes}:${seconds}.${ms}`;
+        }
+
+        function log(message, type = 'log-message') {
+            elements.log.innerHTML += `<span class="${type}">${message}</span>\n`;
+            elements.log.scrollTop = elements.log.scrollHeight;
+        }
+
+        function clearLog() {
+            elements.log.innerHTML = '';
+        }
+
+        function setButtonState(running) {
+            isRunning = running;
+            elements.startBtn.disabled = running;
+            elements.startBtn.textContent = running ? 'Synchronizing...' : 'Start Synchronization';
+            elements.clientSkewInput.disabled = running;
+            elements.networkLatencyInput.disabled = running;
+        }
+
+        // --- Visualization and Animation ---
+
+        function updateClocks() {
+            const trueTime = getServerTrueTime();
+            currentClientTime = getClientSimulatedTime();
+            
+            elements.serverDisplay.textContent = msToTime(trueTime);
+            elements.clientDisplay.textContent = msToTime(currentClientTime);
+            
+            // Show the actual skew for context
+            elements.clientOffsetDisplay.textContent = `${clientSkewMs} ms`;
+
+            if (isRunning) {
+                requestAnimationFrame(updateClocks);
+            }
+        }
+
+        function animateFrame(element, isRequest, duration, callback) {
+            const fromX = isRequest ? '10%' : '90%';
+            const toX = isRequest ? '90%' : '10%';
+
+            element.style.opacity = '1';
+            element.style.transition = `transform ${duration}ms ease-in-out, opacity 100ms`;
+            element.style.transform = `translateX(0) translateY(100px)`; // Initial position outside link
+
+            // Trigger reflow/repaint
+            void element.offsetWidth;
+
+            // Animate
+            element.style.transform = `translateX(${isRequest ? '600px' : '-600px'}) translateY(100px)`;
+
+            setTimeout(() => {
+                element.style.opacity = '0';
+                element.style.transform = `translateX(0) translateY(100px)`; // Reset position
+                if (callback) callback();
+            }, duration);
+        }
+
+        // --- Synchronization Logic (The Four Timestamps) ---
+        
+        // T1: Client sends request
+        async function step1_clientRequest() {
+            log(`\n--- STEP 1: CLIENT REQUEST ---`, 'log-data');
+            
+            const T1 = getClientSimulatedTime();
+            log(`[Client] T1 (Client Transmit Time): <span class="log-time">${msToTime(T1)}</span>`, 'log-time');
+            
+            elements.msgRequest.textContent = `T1: ${msToTime(T1).split('.')[1]}`;
+            
+            const oneWayDelay = networkLatencyMs;
+
+            await new Promise(resolve => {
+                animateFrame(elements.msgRequest, true, oneWayDelay, resolve);
+            });
+            
+            // Time elapsed during transmission: oneWayDelay
+            
+            await step2_serverResponse(T1, oneWayDelay);
+        }
+
+        // T2 & T3: Server processes and sends response
+        async function step2_serverResponse(T1, arrivalDelay) {
+            log(`\n--- STEP 2: SERVER RESPONSE ---`, 'log-data');
+            
+            // Server's true arrival time (T2)
+            const T2_true = getServerTrueTime();
+            // Server processing time (a small, assumed delay)
+            const serverProcessingMs = 5; 
+            
+            // Server's true transmit time (T3)
+            const T3_true = T2_true + serverProcessingMs;
+
+            elements.serverDelayDisplay.textContent = `${serverProcessingMs} ms`;
+
+            // Server logs the times
+            log(`[Server] T2 (Server Receive Time): <span class="log-time">${msToTime(T2_true)}</span>`, 'log-time');
+            log(`[Server] T3 (Server Transmit Time): <span class="log-time">${msToTime(T3_true)}</span>`, 'log-time');
+            log(`[Server] Prepares response containing (T2, T3).`, 'log-data');
+
+            elements.msgResponse.textContent = `T2, T3`;
+
+            const oneWayDelay = networkLatencyMs;
+
+            await new Promise(resolve => {
+                setTimeout(() => {
+                    animateFrame(elements.msgResponse, false, oneWayDelay, resolve);
+                }, serverProcessingMs);
+            });
+            
+            // Time elapsed during transmission: oneWayDelay
+            
+            step3_clientCalculate(T1, T2_true, T3_true, oneWayDelay);
+        }
+
+        // T4: Client receives and calculates
+        function step3_clientCalculate(T1, T2, T3, arrivalDelay) {
+            log(`\n--- STEP 3: CLIENT CALCULATION ---`, 'log-data');
+
+            // Client's simulated time upon arrival (T4)
+            const T4 = getClientSimulatedTime();
+            log(`[Client] T4 (Client Receive Time): <span class="log-time">${msToTime(T4)}</span>`, 'log-time');
+            log(`Client now has all four timestamps: T1, T2, T3, T4.`, 'log-data');
+
+            // 1. Calculate Round-Trip Delay (Latency)
+            // Delay = (T4 - T1) - (T3 - T2)
+            const delayNumerator = T4 - T1; // Client's perception of the total duration
+            const serverProcessingDuration = T3 - T2; // Time server spent processing
+            const totalRoundTripDelay = delayNumerator - serverProcessingDuration;
+            
+            log(`\n[Calculation 1] Round-Trip Delay (p):`, 'log-calc');
+            log(`p = (T4 - T1) - (T3 - T2)`, 'log-calc');
+            log(`p = (${delayNumerator.toFixed(2)} ms) - (${serverProcessingDuration.toFixed(2)} ms) = <span class="log-calc">${totalRoundTripDelay.toFixed(2)} ms</span>`, 'log-calc');
+
+            // 2. Calculate Clock Offset (How far off the client's clock is)
+            // Offset = [(T2 - T1) + (T3 - T4)] / 2
+            const offset = ((T2 - T1) + (T3 - T4)) / 2;
+
+            log(`\n[Calculation 2] Clock Offset (θ):`, 'log-calc');
+            log(`θ = [(T2 - T1) + (T3 - T4)] / 2`, 'log-calc');
+            log(`θ = [(${(T2 - T1).toFixed(2)} ms) + (${(T3 - T4).toFixed(2)} ms)] / 2 = <span class="log-calc">${offset.toFixed(2)} ms</span>`, 'log-calc');
+
+            // 3. Apply Correction
+            log(`\n[Correction] Client adjusts its clock by the offset θ.`, 'log-security');
+            clientSkewMs -= offset;
+            
+            const serverTrueTimeAtT4 = getServerTrueTime();
+            log(`True Server Time at T4: <span class="log-time">${msToTime(serverTrueTimeAtT4)}</span>`, 'log-security');
+            log(`Client's New Estimated True Time: <span class="log-time">${msToTime(T4 - offset)}</span>`, 'log-security');
+            log(`New Client Skew (difference from true time): <span class="log-calc">${(clientSkewMs).toFixed(2)} ms</span>`, 'log-security');
+
+            setButtonState(false);
+            // Re-render the clocks once to show the new, corrected client time
+            updateClocks(); 
+        }
+
+        // --- Main Control ---
+
+        function startSynchronization() {
+            if (isRunning) return;
+            
+            // Get user inputs and validate
+            const newSkew = parseInt(elements.clientSkewInput.value);
+            const newLatency = parseInt(elements.networkLatencyInput.value);
+
+            if (isNaN(newSkew) || isNaN(newLatency)) {
+                log('// Error: Invalid input values. Please enter numbers.', 'log-data');
+                return;
+            }
+
+            clientSkewMs = newSkew;
+            networkLatencyMs = newLatency;
+            
+            clearLog();
+            setButtonState(true);
+            
+            log(`Simulation Parameters: Client Skew = ${clientSkewMs} ms, One-way Latency = ${networkLatencyMs} ms`, 'log-data');
+            
+            // Reset start time to ensure server time starts near 0 for clean logging
+            startTime = new Date().getTime(); 
+            // Restart clock update
+            requestAnimationFrame(updateClocks); 
+            
+            // Start the synchronization process
+            step1_clientRequest();
+        }
+
+        // Initial setup
+        window.onload = () => {
+            // Set initial values on load
+            clientSkewMs = parseInt(elements.clientSkewInput.value);
+            networkLatencyMs = parseInt(elements.networkLatencyInput.value);
+            // Start the clock display loop
+            updateClocks();
+        };
+
+    </script>
+</body>
+</html>

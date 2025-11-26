@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NAT (PAT) Translation Simulator</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Consolas', 'Courier New', monospace;
+            background: linear-gradient(180deg, #353636 50%, #032a36 75%);
+            min-height: 100vh;
+        }
+        a {
+            display: block;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            text-align: center;
+        }
+        .container-card {
+            background: linear-gradient(180deg, #7f7f80 5%, #989999 75%);
+            min-height: 20vh;
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+            padding: 2rem;
+            border-top: 5px solid;
+        }
+        .log-container {
+            height: 250px;
+            overflow-y: auto;
+            background-color: #0f172a; /* Slate 900 */
+            color: #e2e8f0; /* Slate 200 */
+            font-family: 'Consolas', 'Courier New', monospace;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            font-size: 0.9rem;
+        }
+        .log-in { color: #facc15; } /* Yellow */
+        .log-out { color: #3b82f6; } /* Blue */
+        .log-translate { color: #4ade80; font-weight: bold; } /* Green */
+        .log-info { color: #94a3b8; } /* Slate 400 */
+        .header-box {
+            background-color: #e0f2fe;
+            border: 1px solid #7dd3fc;
+        }
+        .nat-table th { background: linear-gradient(180deg, #850909 5%, #e73d09 75%); color: rgb(235, 173, 59); }
+        .nat-table td { font-family: 'Consolas', 'Courier New', monospace; }
+    </style>
+</head>
+<body class="p-4 md:p-10 min-h-screen">
+
+    <div class="max-w-7xl mx-auto">
+        <h1 class="text-4xl font-extrabold text-orange-500 mb-2 text-center">
+            NAT / PAT Simulation
+        </h1>
+        <p class="text-lg text-white mb-8 text-center">
+            Simulating how a router or firewall uses Port Address Translation (PAT) to map multiple private IP addresses to a single public IP.
+        </p>
+        <p class="text-sm text-yellow-500 mb-8 text-center">
+            Press F5 or Reload/Refresh Browser to Reset Simulation.
+        </p>
+        <a id="link" class="text-sm hover:text-lime-500 text-yellow-200 mb-8 text-center" href="index.html">
+            Back to Simulations Index
+        </a>
+
+        <!-- Diagram Trigger -->
+        
+
+        <!-- Configuration Panel -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            <div class="container-card border-yellow-500 lg:col-span-1">
+                <h3 class="text-xl font-bold text-yellow-500 mb-3">Network Configuration</h3>
+                <div class="space-y-2 text-sm">
+                    <div class="p-2 header-box rounded-lg">
+                        <span class="font-semibold text-gray-800">Internal Network (Private):</span>
+                        <span class="font-mono text-blue-700">192.168.1.0/24</span>
+                    </div>
+                    <div class="p-2 header-box rounded-lg">
+                        <span class="font-semibold text-gray-800">External Interface IP (Public/Global):</span>
+                        <span class="font-mono text-red-700">203.0.113.100</span>
+                    </div>
+                    <div class="p-2 bg-yellow-100 border-yellow-300 rounded-lg text-gray-800 font-medium">
+                        Focus: The NAT device changes the Source IP and Source Port of outbound packets.
+                    </div>
+                </div>
+            </div>
+
+            <!-- Simulation Control -->
+            <div class="container-card border-green-600 lg:col-span-2 flex flex-col justify-between">
+                <div>
+                    <h3 class="text-xl font-bold text-green-800 mb-3">Send Outbound Traffic</h3>
+                    <div class="flex flex-col sm:flex-row gap-4">
+                        <select id="source-ip-select" class="flex-grow p-3 border border-gray-300 rounded-lg focus:ring-green-500 focus:border-green-500">
+                            <option value="192.168.1.10">Host A (192.168.1.10)</option>
+                            <option value="192.168.1.20">Host B (192.168.1.20)</option>
+                            <option value="192.168.1.30">Host C (192.168.1.30)</option>
+                        </select>
+                        <select id="service-select" class="flex-grow p-3 border border-gray-300 rounded-lg focus:ring-green-500 focus:border-green-500">
+                            <option value="80">HTTP (Dst Port 80)</option>
+                            <option value="443">HTTPS (Dst Port 443)</option>
+                            <option value="25">SMTP (Dst Port 25)</option>
+                            <option value="21">FTP (Dst Port 21)</option>
+                        </select>
+                        <button onclick="sendPacket()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-150">
+                            Simulate Outbound
+                        </button>
+                    </div>
+                </div>
+                <div class="mt-4">
+                    <h4 class="text-lg font-semibold text-gray-700 mb-2">Simulation Log</h4>
+                    <div id="log" class="log-container">
+                        <p class="log-info">System: Select a host and a destination service, then click 'Simulate Outbound' to start.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- NAT Table & Explanation -->
+        <div class="container-card border-teal-600">
+            <h3 class="text-2xl font-bold text-teal-300 mb-4">NAT Translation Table (NAT TBL)</h3>
+            <p class="text-teal-100 mb-4">
+                The firewall maintains this table to track active connections. This is how it knows where to send the response traffic when it returns from the Internet.
+            </p>
+            <div class="rounded-lg overflow-hidden border border-orange-300">
+                <table class="nat-table w-full text-left text-sm">
+                    <thead>
+                        <tr>
+                            <th class="p-3">Private (Inside) Source IP</th>
+                            <th class="p-3">Private (Inside) Source Port</th>
+                            <th class="p-3">Translated (Global) Source IP</th>
+                            <th class="p-3">Translated (Global) Source Port</th>
+                            <th class="p-3">Destination IP</th>
+                            <th class="p-3">Destination Port</th>
+                        </tr>
+                    </thead>
+                    <tbody id="nat-table-body" class="bg-white text-gray-700">
+                        <!-- Table entries populated by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // --- Configuration Constants ---
+        const PUBLIC_IP = '203.0.113.100';
+        // Ports reserved for the NAT device's use (dynamic range)
+        let nextAvailablePort = 10000; 
+
+        // --- NAT Table Data Structure ---
+        // Stores the mapping: { privateIP, privatePort, translatedPort, destIP, destPort }
+        let natTable = []; 
+
+        // --- DOM References ---
+        const log = document.getElementById('log');
+        const sourceIpSelect = document.getElementById('source-ip-select');
+        const serviceSelect = document.getElementById('service-select');
+        const natTableBody = document.getElementById('nat-table-body');
+
+        // --- Utility Functions ---
+
+        /** Generates a random source port for the internal host (simulating ephemeral port). */
+        function generateInternalPort() {
+            // Standard ephemeral port range is 49152 to 65535, but using a smaller range for simpler simulation.
+            return Math.floor(Math.random() * (50000 - 40000 + 1)) + 40000; 
+        }
+
+        /** Logs a message to the simulation console with appropriate styling. */
+        function logMessage(text, className = 'log-info') {
+            const entry = document.createElement('p');
+            entry.className = className;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${text}`;
+            log.appendChild(entry);
+            log.scrollTop = log.scrollHeight;
+        }
+
+        /** Renders the current state of the NAT table to the DOM. */
+        function renderNatTable() {
+            if (natTable.length === 0) {
+                natTableBody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-gray-500">The NAT Translation Table is currently empty.</td></tr>';
+                return;
+            }
+
+            natTableBody.innerHTML = natTable.map(entry => `
+                <tr class="hover:bg-gray-50">
+                    <td class="p-3">${entry.privateIP}</td>
+                    <td class="p-3">${entry.privatePort}</td>
+                    <td class="p-3">${entry.translatedIP}</td>
+                    <td class="p-3">${entry.translatedPort}</td>
+                    <td class="p-3 text-gray-500">${entry.destIP}</td>
+                    <td class="p-3 text-gray-500">${entry.destPort}</td>
+                </tr>
+            `).join('');
+        }
+
+        // --- 5. Core Simulation Logic ---
+
+        /** Step 1: Simulate the internal host sending a packet. */
+        function sendPacket() {
+            const privateIP = sourceIpSelect.value;
+            const destPort = parseInt(serviceSelect.value);
+            const privatePort = generateInternalPort(); // Host uses an ephemeral port
+            const destIP = '172.217.164.142'; // Simulating Google's IP for demonstration
+            
+            logMessage(`\n--- OUTBOUND REQUEST ---`, 'text-lg font-bold log-out');
+            logMessage(`(1) Host ${privateIP} sends packet to Internet Server ${destIP}:${destPort}`);
+            logMessage(`Packet Headers (Internal): Src=${privateIP}:${privatePort} -> Dst=${destIP}:${destPort}`, 'log-out');
+
+            // Find an unused translated port (PAT)
+            let translatedPort = nextAvailablePort++;
+            
+            // Check if this specific internal flow (privateIP:privatePort:destIP:destPort) is already in the table.
+            // If it is, reuse the translated port (not strictly necessary for this simple sim, but better practice)
+            const existingEntry = natTable.find(
+                e => e.privateIP === privateIP && 
+                     e.privatePort === privatePort && 
+                     e.destIP === destIP && 
+                     e.destPort === destPort
+            );
+
+            if (existingEntry) {
+                translatedPort = existingEntry.translatedPort;
+                logMessage(`(2) NAT Device: Found existing mapping. Reusing Translated Port ${translatedPort}.`, 'log-translate');
+            } else {
+                // Check for port collision on the public side (VERY simplified collision check)
+                while (natTable.some(e => e.translatedPort === translatedPort)) {
+                    translatedPort = nextAvailablePort++;
+                }
+
+                logMessage(`(2) NAT Device: No existing mapping found. Assigning NEW Translated Port ${translatedPort}.`, 'log-translate');
+
+                // Add the new mapping to the NAT table
+                natTable.push({
+                    privateIP: privateIP,
+                    privatePort: privatePort,
+                    translatedIP: PUBLIC_IP,
+                    translatedPort: translatedPort,
+                    destIP: destIP,
+                    destPort: destPort
+                });
+                renderNatTable();
+            }
+
+            // --- NAT Translation happens here (Source IP and Port are rewritten) ---
+            logMessage(`(3) Packet is translated:`, 'log-translate');
+            logMessage(`Source IP: ${privateIP}:${privatePort} -> ${PUBLIC_IP}:${translatedPort}`);
+            
+            logMessage(`Packet Headers (External): Src=${PUBLIC_IP}:${translatedPort} -> Dst=${destIP}:${destPort}`, 'log-translate font-bold');
+
+            // The packet is now sent to the Internet
+            logMessage(`(4) Packet is sent to the Internet. The Internet sees the request coming from ${PUBLIC_IP}.`, 'log-info');
+
+            // Simulate the Internet server responding after a delay
+            setTimeout(() => receiveResponse(privateIP, translatedPort, destIP, destPort), 2000);
+        }
+
+        /** Step 2: Simulate the Internet server sending a response back. */
+        function receiveResponse(originalPrivateIP, translatedPort, destIP, destPort) {
+            logMessage(`\n--- INBOUND RESPONSE ---`, 'text-lg font-bold log-in');
+            
+            // The Internet server sends a response back to the *translated* address
+            logMessage(`(5) Internet Server ${destIP}:${destPort} responds to ${PUBLIC_IP}:${translatedPort}.`);
+            logMessage(`Response Headers (External): Src=${destIP}:${destPort} -> Dst=${PUBLIC_IP}:${translatedPort}`, 'log-in');
+
+            // The NAT device receives the packet and consults the NAT Table
+            logMessage(`(6) NAT Device: Receiving packet for ${PUBLIC_IP}:${translatedPort}. Consulting NAT Table...`, 'log-translate');
+            
+            // Find the correct internal mapping using the destination (translated) port
+            const mapping = natTable.find(
+                e => e.translatedPort === translatedPort && 
+                     e.translatedIP === PUBLIC_IP && 
+                     e.destIP === destIP && 
+                     e.destPort === destPort
+            );
+
+            if (mapping) {
+                // --- Reverse Translation happens here (Destination IP and Port are rewritten) ---
+                logMessage(`(7) MATCH FOUND! Reverse translating the destination back to internal host:`, 'log-translate');
+                logMessage(`Destination IP: ${PUBLIC_IP}:${translatedPort} -> ${mapping.privateIP}:${mapping.privatePort}`, 'log-translate');
+                
+                logMessage(`Response Headers (Internal): Src=${destIP}:${destPort} -> Dst=${mapping.privateIP}:${mapping.privatePort}`, 'log-translate font-bold');
+                
+                logMessage(`(8) Packet successfully delivered to Host ${mapping.privateIP}. Connection successful.`, 'log-translate');
+
+            } else {
+                logMessage(`(7) Error: No active mapping found for port ${translatedPort}. Response dropped (Connection timeout).`, 'text-red-500 font-bold');
+            }
+        }
+
+
+        // Initialize on load
+        window.onload = function() {
+            renderNatTable(); // Show empty table initially
+        };
+
+    </script>
+</body>
+</html>

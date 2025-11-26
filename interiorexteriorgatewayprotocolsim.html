@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IGP vs EGP Routing Simulator</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Consolas', 'Courier New', monospace;
+            background: linear-gradient(180deg, #353636 50%, #032a36 75%);
+            min-height: 100vh;
+        }
+        a {
+            display: block;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            text-align: center;
+        }
+        .card {
+            background-color: white;
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 4, 0, 0.05);
+            padding: 1rem;
+            height: 100%;
+        }
+        .console-output {
+            background-color: #1f2937; /* Dark console background */
+            color: #0aeb15; /* Light text */
+            font-family: 'Consolas', 'Courier New', monospace;
+            border-radius: 0.75rem;
+            padding: 1rem;
+            min-height: 200px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            line-height: 1.5;
+            font-size: 1.15rem;
+        }
+        /* Console log coloring for clarity */
+        .log-step { color: #f6ad55; font-weight: bold; } /* Orange/Amber */
+        .log-igp { color: #48bb78; } /* Green for IGP */
+        .log-egp { color: #63b3ed; } /* Blue for EGP/BGP */
+        .log-info { color: #a0aec0; }
+        .log-router { color: #f6ad55; font-weight: bold; }
+
+        /* Network Diagram Styling */
+        #network-diagram {
+            position: relative;
+            height: 400px;
+            width: 100%;
+            margin: 0 auto;
+        }
+        .as-boundary {
+            position: absolute;
+            border: 4px dashed #6b7280;
+            border-radius: 1rem;
+            opacity: 0.7;
+            pointer-events: none;
+        }
+        .as-label {
+            position: absolute;
+            font-weight: bold;
+            font-size: 1.5rem;
+            padding: 0.5rem;
+            color: white;
+            border-radius: 0.5rem;
+        }
+        .node {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+            font-weight: bold;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s, box-shadow 0.3s;
+            cursor: default;
+            z-index: 10;
+        }
+        .node:hover {
+            transform: scale(1.1);
+            box-shadow: 0 8px 12px rgba(0, 0, 0, 0.2);
+        }
+        .link-line {
+            position: absolute;
+            height: 3px;
+            transform-origin: 0 0;
+            transition: background-color 0.5s ease, opacity 0.5s ease;
+        }
+        .link-line.active {
+            background-color: #f56565; /* Red for active path */
+            height: 5px;
+            z-index: 5;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-10 min-h-screen">
+
+    <div class="max-w-7xl mx-auto">
+        <h1 class="text-4xl font-extrabold text-orange-500 mb-2 text-center">
+            IGP vs EGP Routing Zone Simulator
+        </h1>
+        <p class="text-lg text-white mb-8 text-center">
+            Visualize how protocols differ inside (IGP) and between (EGP) Autonomous Systems.
+        </p>
+        <p class="text-sm text-yellow-500 mb-8 text-center">
+            Press F5 or Reload/Refresh Browser to Reset Simulation.
+        </p>
+        <a id="link" class="text-sm hover:text-lime-500 text-yellow-200 mb-8 text-center" href="index.html">
+            Back to Simulations Index
+        </a>
+        
+        <div class="card mb-8">
+            <h3 class="text-xl font-bold text-gray-800 mb-2">Autonomous Systems (AS) and Protocols</h3>
+            <p class="text-gray-700 text-sm mb-4">
+                
+                The Internet is divided into ASes, which are groups of IP networks controlled by a single administrative entity (e.g., a large corporation, ISP, or university).
+            </p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                <div>
+                    <span class="font-bold text-lg text-green-600">AS100 (Interior Gateway Protocol - IGP)</span>
+                    <ul class="list-disc list-inside ml-1 text-gray-600">
+                        <li>**Protocol:** OSPF (Open Shortest Path First)</li>
+                        <li>**Focus:** Finds the absolute shortest path (lowest metric/cost).</li>
+                        <li>**Policy:** All routers trust each other.</li>
+                    </ul>
+                </div>
+                <div>
+                    <span class="font-bold text-lg text-blue-600">AS200 (Exterior Gateway Protocol - EGP)</span>
+                    <ul class="list-disc list-inside ml-1 text-gray-600">
+                        <li>**Protocol:** BGP (Border Gateway Protocol)</li>
+                        <li>**Focus:** Path selection based on network policy, economics, and trust, not just metric.</li>
+                        <li>**Policy:** Border routers only trust internal routes, not external metrics.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            <!-- Controls -->
+            <div class="lg:col-span-1">
+                <div class="card">
+                    <h3 class="text-2xl font-bold text-gray-800 mb-4">Route Path Selector</h3>
+                    
+                    <label for="start-node" class="block text-sm font-medium text-gray-700 mb-1">Source Router</label>
+                    <select id="start-node" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 mb-4">
+                        <option value="R2">R2 (AS100)</option>
+                        <option value="R3">R3 (AS100)</option>
+                        <option value="R5">R5 (AS200)</option>
+                        <option value="R6">R6 (AS200)</option>
+                    </select>
+
+                    <label for="end-node" class="block text-sm font-medium text-gray-700 mb-1">Destination Router</label>
+                    <select id="end-node" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 mb-6">
+                        <option value="R5">R5 (AS200)</option>
+                        <option value="R3">R3 (AS100)</option>
+                        <option value="R2">R2 (AS100)</option>
+                        <option value="R6">R6 (AS200)</option>
+                    </select>
+                    
+                    <button id="route-btn" onclick="sendPacket()" 
+                            class="w-full bg-emerald-600 hover:bg-emerald-800 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-150">
+                        Send Packet and Trace Route
+                    </button>
+                </div>
+            </div>
+
+            <!-- Simulation and Table -->
+            <div class="lg:col-span-2 grid grid-rows-1 gap-8">
+                <!-- Network Diagram -->
+                <div class="card relative overflow-hidden">
+                    <h3 class="text-2xl font-bold text-gray-800 mb-4">Topology View</h3>
+                    <div id="network-diagram">
+                        <!-- AS100 (OSPF) boundary -->
+                        <div class="as-boundary" style="top: 10px; left: 10px; width: 48%; height: 95%; border-color: #48bb78;"></div>
+                        <div class="as-label bg-green-600" style="top: 20px; left: 20px;">AS100 (IGP/OSPF)</div>
+
+                        <!-- AS200 (BGP) boundary -->
+                        <div class="as-boundary" style="top: 10px; right: 10px; width: 48%; height: 95%; border-color: #63b3ed;"></div>
+                        <div class="as-label bg-blue-600" style="top: 20px; right: 20px;">AS200 (EGP/BGP)</div>
+                        
+                        <!-- Nodes and links are drawn here by JS -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Console Output -->
+        <div class="card p-1 mt-8">
+            <h3 class="text-2xl font-bold text-gray-800 px-8 pt-6">Routing Protocol Log</h3>
+            <div id="console" class="console-output">
+                Select source and destination routers and click "Send Packet" to trace the route.
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Global State and Constants ---
+        const consoleOutput = document.getElementById('console');
+        const diagramContainer = document.getElementById('network-diagram');
+
+        const NODES = {
+            // AS100 (IGP/OSPF)
+            R1: { x: 200, y: 100, as: 100, isBorder: true, color: '#48bb78' }, // Border Router
+            R2: { x: 100, y: 250, as: 100, isBorder: false, color: '#48bb78' },
+            R3: { x: 300, y: 250, as: 100, isBorder: false, color: '#48bb78' },
+            // AS200 (EGP/BGP)
+            R4: { x: 500, y: 100, as: 200, isBorder: true, color: '#63b3ed' }, // Border Router
+            R5: { x: 400, y: 250, as: 200, isBorder: false, color: '#63b3ed' },
+            R6: { x: 600, y: 250, as: 200, isBorder: false, color: '#63b3ed' },
+        };
+
+        const LINKS = {
+            // Internal Links (IGP - OSPF Metric)
+            'R1-R2': { nodes: ['R1', 'R2'], cost: 10 },
+            'R1-R3': { nodes: ['R1', 'R3'], cost: 20 },
+            'R2-R3': { nodes: ['R2', 'R3'], cost: 5 }, // Faster link between R2 and R3
+            'R4-R5': { nodes: ['R4', 'R5'], cost: 15 },
+            'R4-R6': { nodes: ['R4', 'R6'], cost: 5 },
+            'R5-R6': { nodes: ['R5', 'R6'], cost: 10 },
+            // External Link (EGP - BGP)
+            'R1-R4': { nodes: ['R1', 'R4'], cost: 1 }, // BGP cost is typically ignored for path selection
+        };
+        
+        /** Utility: Logs messages to the console with styling */
+        function log(message, type = 'log-info') {
+            const time = new Date().toLocaleTimeString('en-US', { hour12: false, second: '2-digit' });
+            consoleOutput.innerHTML += `[${time}] <span class="${type}">${message}</span>\n`;
+            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+        }
+
+        /** Utility: Draws a line between two points */
+        function drawLink(id, n1, n2, cost, isExternal = false) {
+            const nodeA = NODES[n1];
+            const nodeB = NODES[n2];
+            const x1 = nodeA.x, y1 = nodeA.y;
+            const x2 = nodeB.x, y2 = nodeB.y;
+
+            const dx = x2 - x1;
+            const dy = y2 - y1;
+            const length = Math.sqrt(dx * dx + dy * dy);
+            const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+
+            const link = document.createElement('div');
+            link.id = `link-${id}`;
+            link.className = `link-line ${isExternal ? 'bg-blue-800' : 'bg-gray-500'}`;
+            link.style.width = `${length}px`;
+            link.style.left = `${x1 + 30}px`; // Center offset
+            link.style.top = `${y1 + 30}px`; // Center offset
+            link.style.transform = `rotate(${angle}deg)`;
+            diagramContainer.appendChild(link);
+
+            const costLabel = document.createElement('div');
+            costLabel.className = 'absolute bg-white px-2 text-xs font-bold rounded-full border border-gray-400';
+            costLabel.textContent = isExternal ? 'BGP' : `Cost: ${cost}`;
+            costLabel.style.left = `${x1 + dx / 2 + 10}px`;
+            costLabel.style.top = `${y1 + dy / 2 + 10}px`;
+            diagramContainer.appendChild(costLabel);
+        }
+
+        /** Renders the network diagram (Nodes and Links) */
+        function renderNetwork() {
+            // Draw Links
+            for (const id in LINKS) {
+                const { nodes: [n1, n2], cost } = LINKS[id];
+                const isExternal = (NODES[n1].as !== NODES[n2].as);
+                drawLink(id, n1, n2, cost, isExternal);
+            }
+
+            // Draw Nodes
+            for (const name in NODES) {
+                const { x, y, color, isBorder } = NODES[name];
+                const node = document.createElement('div');
+                node.className = `node ${isBorder ? 'border-4 border-red-500' : ''}`;
+                node.style.left = `${x}px`;
+                node.style.top = `${y}px`;
+                node.style.backgroundColor = color;
+                node.textContent = name;
+                diagramContainer.appendChild(node);
+            }
+        }
+
+        /** Highlights the path on the diagram */
+        function highlightPath(path) {
+            // Clear previous highlights
+            document.querySelectorAll('.link-line').forEach(el => el.classList.remove('active'));
+
+            for (let i = 0; i < path.length - 1; i++) {
+                const n1 = path[i];
+                const n2 = path[i + 1];
+                // Determine canonical link ID (alphabetical order)
+                const linkId = n1 < n2 ? `${n1}-${n2}` : `${n2}-${n1}`;
+                const linkEl = document.getElementById(`link-${linkId}`);
+                if (linkEl) {
+                    linkEl.classList.add('active');
+                }
+            }
+        }
+
+        /** Finds the shortest path within an AS using a simplified Dijkstra's (IGP) */
+        function findShortestPath(startNode, endNode) {
+            const asId = NODES[startNode].as;
+            let distances = {};
+            let previous = {};
+            let nodes = [];
+
+            // Initialize
+            for (let node in NODES) {
+                if (NODES[node].as === asId) {
+                    distances[node] = Infinity;
+                    previous[node] = null;
+                    nodes.push(node);
+                }
+            }
+            distances[startNode] = 0;
+
+            while (nodes.length) {
+                // Find the node with the smallest distance
+                nodes.sort((a, b) => distances[a] - distances[b]);
+                let closest = nodes.shift();
+
+                if (closest === endNode) {
+                    break; // Path found
+                }
+                
+                if (distances[closest] === Infinity) {
+                    break; // Remaining nodes are unreachable
+                }
+
+                // Look at neighbors
+                for (const id in LINKS) {
+                    const { nodes: [n1, n2], cost } = LINKS[id];
+                    
+                    let neighbor = null;
+                    if (n1 === closest && NODES[n2].as === asId) neighbor = n2;
+                    else if (n2 === closest && NODES[n1].as === asId) neighbor = n1;
+
+                    if (neighbor) {
+                        const newDist = distances[closest] + cost;
+                        if (newDist < distances[neighbor]) {
+                            distances[neighbor] = newDist;
+                            previous[neighbor] = closest;
+                        }
+                    }
+                }
+            }
+            
+            // Reconstruct path
+            let path = [];
+            let current = endNode;
+            while (current) {
+                path.unshift(current);
+                current = previous[current];
+            }
+            return { path, cost: distances[endNode] };
+        }
+
+
+        /** Main function to simulate the packet journey */
+        function sendPacket() {
+            consoleOutput.innerHTML = '';
+            const startNode = document.getElementById('start-node').value;
+            const endNode = document.getElementById('end-node').value;
+
+            if (startNode === endNode) {
+                log('Source and Destination are the same. Route trace aborted.', 'log-info');
+                return;
+            }
+
+            const startAS = NODES[startNode].as;
+            const endAS = NODES[endNode].as;
+            
+            log(`Starting packet trace from <span class="log-router">${startNode} (AS${startAS})</span> to <span class="log-router">${endNode} (AS${endAS})</span>.`, 'log-step');
+            
+            if (startAS === endAS) {
+                // --- Internal Routing (IGP - OSPF) ---
+                log('IGP Scenario: Destination is within the same Autonomous System.', 'log-step');
+                log('Protocol used: OSPF (Link-State Protocol). Goal: Find the lowest cost path.', 'log-igp');
+                
+                const { path, cost } = findShortestPath(startNode, endNode);
+                
+                if (cost === Infinity) {
+                    log('Error: Destination unreachable within the AS.', 'log-error');
+                    highlightPath([]);
+                    return;
+                }
+                
+                log(`Path found via OSPF: ${path.join(' -> ')}. Total cost: ${cost}.`, 'log-igp');
+                highlightPath(path);
+
+            } else {
+                // --- External Routing (EGP - BGP) ---
+                log('EGP Scenario: Destination is in a different Autonomous System.', 'log-step');
+                log('Protocol used: BGP (Path Vector Protocol). Goal: Apply policy, not just shortest path.', 'log-egp');
+
+                // 1. Route internally to the border router (AS100 -> R1)
+                const borderRouter = startAS === 100 ? 'R1' : 'R4';
+                log(`1. IGP Phase: Route internally to the Border Router (<span class="log-router">${borderRouter}</span>) using OSPF.`, 'log-igp');
+                const internalRoute = findShortestPath(startNode, borderRouter);
+                
+                if (internalRoute.cost === Infinity) {
+                    log(`Error: Source cannot reach the border router ${borderRouter}.`, 'log-error');
+                    highlightPath([]);
+                    return;
+                }
+                
+                log(`   Internal Path to Border: ${internalRoute.path.join(' -> ')}.`, 'log-igp');
+
+                // 2. Cross the AS boundary (R1 -> R4)
+                log('2. EGP Phase: Border Router <span class="log-router">R1</span> determines the exit path using BGP attributes.', 'log-egp');
+                log('   BGP Decision: AS path, local preference, MED, etc., determine the best exit. (In this simulation, R1 knows AS200 is reachable via R4).', 'log-egp');
+                const pathCross = [borderRouter, endAS === 200 ? 'R4' : 'R1'];
+
+                // 3. Route internally to the final destination (R4 -> R5 or R6)
+                const receivingBorder = endAS === 100 ? 'R1' : 'R4';
+                log(`3. IGP Phase: Receiving Border Router (<span class="log-router">${receivingBorder}</span>) routes internally to the final destination (<span class="log-router">${endNode}</span>).`, 'log-igp');
+                const finalRoute = findShortestPath(receivingBorder, endNode);
+                
+                if (finalRoute.cost === Infinity) {
+                    log(`Error: Receiving border router cannot reach ${endNode}.`, 'log-error');
+                    highlightPath([]);
+                    return;
+                }
+                
+                log(`   Final Internal Path: ${finalRoute.path.join(' -> ')}.`, 'log-igp');
+
+                // Combine the paths
+                // [Start -> Border1], [Border1 -> Border2], [Border2 -> End]
+                const fullPath = internalRoute.path
+                    .slice(0, -1) // remove R1/R4
+                    .concat(pathCross)
+                    .concat(finalRoute.path.slice(1)); // remove R4/R1
+
+                log(`Full EGP/IGP Trace: ${fullPath.join(' -> ')}`, 'log-step');
+                highlightPath(fullPath);
+            }
+        }
+
+        // Initialize on load
+        document.addEventListener('DOMContentLoaded', () => {
+            renderNetwork();
+        });
+
+    </script>
+</body>
+</html>

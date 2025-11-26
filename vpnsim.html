@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VPN Simulation Model</title>
+    <style>
+        :root {
+            --bg-color: #3a3b3d;
+            --card-bg: #3f3e3e;
+            --primary: #df8014;
+            --danger: #dc2626;
+            --success: #16a34a;
+            --text: #ffffff;
+        }
+
+        body {
+            font-family: 'Consolas', 'Courier New', monospace;
+            background: linear-gradient(180deg, #353636 50%, #032a36 75%);
+            min-height: 100vh;
+            color: var(--text);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        a {
+            display: block;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            text-align: center;
+            color: #ffffff;
+        }
+
+        h1 { color: var(--primary); margin-bottom: 10px; }
+        p { 
+            max-width: 600px; 
+            text-align: center; 
+            margin-bottom: 30px;
+            color: white; 
+        }
+
+        /* Controls */
+        .controls {
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 40px;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        input[type="text"] {
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            width: 250px;
+        }
+
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: 0.2s;
+        }
+
+        #sendBtn { background-color: var(--primary); color: white; }
+        #sendBtn:hover { background-color: #1d4ed8; }
+        
+        .toggle-container { display: flex; align-items: center; gap: 10px; }
+        .switch { position: relative; display: inline-block; width: 60px; height: 34px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider {
+            position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #ccc; transition: .4s; border-radius: 34px;
+        }
+        .slider:before {
+            position: absolute; content: ""; height: 26px; width: 26px;
+            left: 4px; bottom: 4px; background-color: white;
+            transition: .4s; border-radius: 50%;
+        }
+        input:checked + .slider { background-color: var(--success); }
+        input:checked + .slider:before { transform: translateX(26px); }
+
+        /* Network Diagram */
+        .network-map {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            max-width: 900px;
+            position: relative;
+            margin-bottom: 40px;
+        }
+
+        .node {
+            background: var(--card-bg);
+            border: 2px solid #5ace24;
+            border-radius: 10px;
+            padding: 15px;
+            width: 160px;
+            height: 180px;
+            text-align: center;
+            z-index: 2;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+        }
+
+        .node-icon { font-size: 2rem; display: block; margin-bottom: 10px; }
+        .node-ip { font-size: 0.8rem; color: #666; font-family: monospace; display: block; margin-top: 5px;}
+        .node-label { font-weight: bold; margin-bottom: 5px; display: block; color: #98f098; }
+
+        /* VPN Specific visibility */
+        #vpnNode { opacity: 0.3; filter: grayscale(100%); }
+        #vpnNode.active { opacity: 1; filter: grayscale(0%); border-color: var(--success); }
+
+        /* Connection Lines */
+        .lines {
+            position: absolute; top: 50%; left: 0; right: 0; height: 4px;
+            background: #b817f88e; z-index: 1; transform: translateY(-50%);
+        }
+        
+        /* The Data Packet */
+        #packet {
+            position: absolute;
+            top: 50%; left: 80px; /* Starting at user */
+            transform: translate(-50%, -50%);
+            background: #b80750;
+            color: rgb(248, 248, 248);
+            padding: 4px 6px;
+            border-radius: 15px;
+            font-size: 1rem;
+            white-space: nowrap;
+            z-index: 3;
+            opacity: 0;
+            transition: left 1s linear, background-color 0.2s;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            font-weight: bold;
+        }
+
+        #packet.encrypted { background-color: var(--success); border: 2px solid #004d00; }
+
+        /* Logs */
+        .log-console {
+            width: 100%; max-width: 900px;
+            background: #2a292c; color: #00ff00;
+            font-family: 'Consolas', monospace;
+            padding: 15px;
+            border-radius: 8px;
+            border: #858686 3px solid;
+            height: 200px;
+            overflow-y: auto;
+            font-size: 0.9rem;
+        }
+        .log-entry { margin-bottom: 5px; border-bottom: 1px solid #bfe0f5; padding-bottom: 2px;}
+        .log-entry span { opacity: 0.7; }
+        .alert { color: #ff4444; }
+    </style>
+</head>
+<body>
+
+    <h1>VPN Simulation Model</h1>
+    <p>Toggle the VPN to see how data encryption and IP masking change as data travels across the network.</p>
+    <p>Press F5 or Reload/Refresh Browser to Reset Simulation.
+        </p>
+        <a id="link" class="text-sm hover:text-lime-500 text-yellow-200 mb-8 text-center" href="index.html">
+            Back to Simulations Index
+        </a>
+
+    <div class="controls">
+        <div class="toggle-container">
+            <span>VPN OFF</span>
+            <label class="switch">
+                <input type="checkbox" id="vpnToggle">
+                <span class="slider"></span>
+            </label>
+            <span>VPN ON</span>
+        </div>
+        <input type="text" id="dataInput" placeholder="Enter sensitive data (e.g. Password)">
+        <button id="sendBtn" onclick="simulateTraffic()">Send Data</button>
+    </div>
+
+    
+
+
+
+    <div class="network-map">
+        <div class="lines"></div>
+
+        <div class="node" id="userNode">
+            <span class="node-icon">💻</span>
+            <span class="node-label">User Device</span>
+            <span class="node-ip">IP: 203.0.113.1</span>
+        </div>
+
+        <div class="node" id="ispNode">
+            <span class="node-icon">📡</span>
+            <span class="node-label">ISP / Hacker</span>
+            <span class="node-ip">Public Network</span>
+        </div>
+
+        <div class="node" id="vpnNode">
+            <span class="node-icon">🛡️</span>
+            <span class="node-label">VPN Server</span>
+            <span class="node-ip">IP: 198.51.100.5</span>
+        </div>
+
+        <div class="node" id="targetNode">
+            <span class="node-icon">🌐</span>
+            <span class="node-label">Internet</span>
+            <span class="node-ip">Destination</span>
+        </div>
+
+        <div id="packet">Data</div>
+    </div>
+
+    <div class="log-console" id="logConsole">
+        <div class="log-entry">>> System Ready... Waiting for input.</div>
+    </div>
+
+    <script>
+        const vpnToggle = document.getElementById('vpnToggle');
+        const vpnNode = document.getElementById('vpnNode');
+        const packet = document.getElementById('packet');
+        const logConsole = document.getElementById('logConsole');
+        const sendBtn = document.getElementById('sendBtn');
+
+        // State
+        let isVpnOn = false;
+
+        // Toggle Listener
+        vpnToggle.addEventListener('change', (e) => {
+            isVpnOn = e.target.checked;
+            if(isVpnOn) {
+                vpnNode.classList.add('active');
+                log(">> VPN Protocol Initiated. Tunnel established to 198.51.100.5");
+            } else {
+                vpnNode.classList.remove('active');
+                log(">> VPN Disconnected. Connection is unencrypted.");
+            }
+        });
+
+        function log(message, isAlert = false) {
+            const entry = document.createElement('div');
+            entry.classList.add('log-entry');
+            if(isAlert) entry.classList.add('alert');
+            
+            const time = new Date().toLocaleTimeString();
+            entry.innerHTML = `<span>[${time}]</span> ${message}`;
+            
+            logConsole.prepend(entry);
+        }
+
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        async function simulateTraffic() {
+            const rawData = document.getElementById('dataInput').value || "Password123";
+            const encryptedData = btoa(rawData).substring(0, 10) + "..."; // Fake encryption using Base64
+            
+            // Disable button during animation
+            sendBtn.disabled = true;
+
+            // Reset packet
+            packet.style.transition = 'none';
+            packet.style.left = '10%'; // User position
+            packet.style.opacity = '1';
+            packet.innerText = rawData;
+            packet.classList.remove('encrypted');
+
+            if (isVpnOn) {
+                // --- VPN SCENARIO ---
+                
+                // Step 1: User Encrypts
+                await sleep(500);
+                packet.classList.add('encrypted');
+                packet.innerText = encryptedData;
+                log(`USER: Encrypting data. Destination masked. Sending to VPN Node.`);
+
+                // Step 2: Move to ISP (Tunnel)
+                packet.style.transition = 'left 1.5s linear';
+                packet.style.left = '35%'; // ISP Position
+                await sleep(1500);
+                
+                log(`ISP/HACKER: Detected traffic from 203.0.113.1. Content: "${encryptedData}" (UNREADABLE). Destination: VPN Server.`);
+
+                // Step 3: Move to VPN Server
+                packet.style.left = '62%'; // VPN Position
+                await sleep(1500);
+
+                // Step 4: VPN Decrypts and Spoofs
+                packet.classList.remove('encrypted');
+                packet.innerText = rawData; // Decrypted for the internet
+                log(`VPN SERVER: Decrypting data. Masking User IP (203.0.113.1) with VPN IP (198.51.100.5). Forwarding to Internet.`);
+
+                // Step 5: Move to Target
+                packet.style.left = '90%'; // Target Position
+                await sleep(1500);
+                
+                log(`INTERNET: Received request "${rawData}" from IP 198.51.100.5 (User Location Hidden).`);
+
+            } else {
+                // --- DIRECT CONNECTION SCENARIO ---
+
+                // Step 1: User Sends
+                log(`USER: Sending plain text data directly to Internet.`, true);
+                
+                // Step 2: Move to ISP
+                packet.style.transition = 'left 1.5s linear';
+                packet.style.left = '35%'; 
+                await sleep(1500);
+
+                log(`ISP/HACKER: Intercepted traffic from 203.0.113.1. Content: "${rawData}" (READABLE). Destination: Known.`, true);
+
+                // Step 3: Bypass VPN (Visual Jump or flyover)
+                packet.style.transition = 'left 2s linear';
+                packet.style.left = '90%';
+                await sleep(2000);
+
+                log(`INTERNET: Received request "${rawData}" from IP 203.0.113.1 (User Location Exposed).`, true);
+            }
+
+            // Reset
+            await sleep(1000);
+            packet.style.opacity = '0';
+            sendBtn.disabled = false;
+        }
+    </script>
+</body>
+</html>

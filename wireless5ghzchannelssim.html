@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>802.11ac 5GHz Channel & Bandwidth Simulator</title>
+    <!-- Load Tailwind CSS for modern styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Consolas', 'Courier New', monospace;
+            background: linear-gradient(180deg, #353636 50%, #032a36 75%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        a {
+            display: block;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            text-align: center;
+        }
+        .container-card {
+            background-color: rgb(134, 133, 133);
+            border-radius: 1rem;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.08);
+            padding: 2rem;
+            max-width: 1200px;
+            margin: auto;
+        }
+        .channel-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
+            gap: 4px;
+            margin-top: 1rem;
+            border: 1px solid #e5e7eb;
+            padding: 10px;
+            border-radius: 0.5rem;
+        }
+        .channel-cell {
+            padding: 8px 0;
+            text-align: center;
+            font-size: 0.75rem;
+            font-weight: 500;
+            border-radius: 0.375rem;
+            transition: background-color 0.2s, transform 0.2s;
+            cursor: pointer;
+            position: relative;
+        }
+        .channel-cell:hover:not(.active) {
+            transform: scale(1.05);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .channel-cell.available {
+            background-color: #e0f2f1; /* Light Teal */
+            border: 1px solid #4fd1c5;
+        }
+        .channel-cell.unavailable {
+            background-color: #fecaca; /* Light Red */
+            color: #b91c1c;
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        .channel-cell.primary {
+            background-color: #f97316; /* Orange */
+            color: white;
+            font-weight: bold;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+        }
+        .channel-cell.secondary {
+            background-color: #fbbf24; /* Amber */
+            color: #1f2937;
+            font-weight: bold;
+        }
+        .band-label {
+            font-size: 0.9rem;
+            font-weight: 700;
+            color: #4b5563;
+            margin-bottom: 5px;
+            text-align: center;
+            border-bottom: 2px solid;
+            padding-bottom: 5px;
+        }
+        .channel-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 0.65rem;
+            pointer-events: none;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+        }
+        .log-box {
+            min-height: 150px;
+            background-color: #1f2937;
+            color: #e5e7eb;
+            font-family: 'Consolas', 'Courier New', monospace;
+            border-radius: 0.75rem;
+            padding: 1rem;
+            overflow-y: auto;
+            font-size: 0.85rem;
+        }
+        .log-success { color: #34d399; }
+        .log-info { color: #60a5fa; }
+        .log-error { color: #f87171; }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-right: 1.5rem;
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+
+    <div class="container-card">
+        <h1 class="text-3xl font-extrabold text-orange-500 mb-2 text-center">
+            802.11 5GHz Channel Bonding Simulator
+        </h1>
+        <p class="text-center text-white mb-8 max-w-4xl mx-auto">
+            Select a primary (base) channel and a bandwidth (20/40/80/160 MHz) to visualize how 5GHz Wi-Fi channels are bonded together to achieve higher throughput.
+        </p>
+        <p class="text-sm text-yellow-500 mb-8 text-center">
+            Press F5 or Reload/Refresh Browser to Reset Simulation.
+        </p>
+        <a id="link" class="text-sm hover:text-lime-500 text-yellow-200 mb-8 text-center" href="index.html">
+            Back to Simulations Index
+        </a>
+
+        <!-- Controls -->
+        <div class="flex flex-col md:flex-row justify-center items-center space-y-4 md:space-y-0 md:space-x-8 p-4 bg-gray-50 rounded-lg shadow-inner mb-8">
+            <div class="flex items-center space-x-2">
+                <label for="bandwidth" class="font-medium text-gray-700">Select Bandwidth:</label>
+                <select id="bandwidth" onchange="simulateChannels()" class="p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
+                    <option value="20">20 MHz (802.11a/n/ac)</option>
+                    <option value="40">40 MHz (802.11n/ac)</option>
+                    <option value="80" selected>80 MHz (802.11ac/ax)</option>
+                    <option value="160">160 MHz (802.11ac Wave 2 / ax)</option>
+                </select>
+            </div>
+            <div class="text-lg font-bold text-indigo-600">
+                Primary Channel: <span id="current-channel">Select Below</span>
+            </div>
+        </div>
+        
+
+        <!-- Legend -->
+        <div class="flex flex-wrap justify-center mb-4 text-sm text-gray-700">
+            <div class="legend-item"><span class="w-4 h-4 rounded-full mr-2 bg-f97316"></span> Primary (Base)</div>
+            <div class="legend-item"><span class="w-4 h-4 rounded-full mr-2 bg-fbbf24"></span> Secondary/Bonded</div>
+            <div class="legend-item"><span class="w-4 h-4 rounded-full mr-2 bg-e0f2f1 border border-4fd1c5"></span> Available 20 MHz Channel</div>
+        </div>
+
+        <!-- Channel Map Visualization -->
+        <div id="channel-map" class="channel-grid">
+            <!-- Channels will be injected here by JavaScript -->
+        </div>
+
+        <!-- Simulation Log -->
+        <h3 class="text-xl font-semibold text-gray-800 mt-8 mb-3">Simulation Log & Rules</h3>
+        <div id="sim-log" class="log-box">
+            <p class="log-info">// Select a bandwidth and then click an available 20 MHz channel to use as the Primary Channel.</p>
+        </div>
+    </div>
+
+    <script>
+        // Define all non-DFS 5GHz channels (20MHz wide)
+        const CHANNELS = [
+            // UNII-1 (Low band - Indoor Use)
+            { channel: 36, freq: 5180, band: 'UNII-1', color: 'bg-indigo-200' },
+            { channel: 40, freq: 5200, band: 'UNII-1', color: 'bg-indigo-200' },
+            { channel: 44, freq: 5220, band: 'UNII-1', color: 'bg-indigo-200' },
+            { channel: 48, freq: 5240, band: 'UNII-1', color: 'bg-indigo-200' },
+
+            // UNII-2A (Mid band - DFS Required in many regions) - Omitted for simplicity/non-US rules.
+            // UNII-2C (Upper Mid band - DFS Required) - Omitted for simplicity/non-US rules.
+
+            // UNII-3 (High band - Outdoor & Indoor Use)
+            { channel: 149, freq: 5745, band: 'UNII-3', color: 'bg-purple-200' },
+            { channel: 153, freq: 5765, band: 'UNII-3', color: 'bg-purple-200' },
+            { channel: 157, freq: 5785, band: 'UNII-3', color: 'bg-purple-200' },
+            { channel: 161, freq: 5805, band: 'UNII-3', color: 'bg-purple-200' },
+            // Channel 165 is sometimes used, but 160MHz bonding often stops at 161
+        ];
+
+        let selectedPrimaryChannel = null;
+        const channelMapElement = document.getElementById('channel-map');
+        const logElement = document.getElementById('sim-log');
+        const currentChannelDisplay = document.getElementById('current-channel');
+
+        // --- Utility Functions ---
+
+        function log(message, type = 'log-info') {
+            logElement.innerHTML += `<span class="${type}">${message}</span>\n`;
+            logElement.scrollTop = logElement.scrollHeight;
+        }
+
+        function clearLog() {
+            logElement.innerHTML = '';
+        }
+
+        // --- Core Logic: Channel Calculation ---
+
+        /**
+         * Calculates the 20MHz channels required for a given primary channel and bandwidth.
+         * @param {number} primaryChannel The starting 20MHz channel (e.g., 36).
+         * @param {number} bandwidthMHz The total bandwidth (20, 40, 80, 160).
+         * @returns {object} An object containing the primary channel, bonded channels, and center frequency.
+         */
+        function calculateChannels(primaryChannel, bandwidthMHz) {
+            const primaryIndex = CHANNELS.findIndex(c => c.channel === primaryChannel);
+            if (primaryIndex === -1) return { error: "Primary channel not found." };
+
+            const bondedChannels = [primaryChannel];
+            let requiredChannelsCount = bandwidthMHz / 20;
+
+            // Ensure the primary channel is part of the first 20MHz of a block (i.e., channel 36, 44, 149, 157)
+            // This is a simplification of bonding rules but illustrates the concept.
+            const validPrimaryStart = [36, 44, 149, 157];
+            if (bandwidthMHz > 20 && requiredChannelsCount > 1 && !validPrimaryStart.includes(primaryChannel) ) {
+                // Check if this primary channel is a valid starting point for the chosen bandwidth.
+                // In 5GHz, the primary channel must be the lowest available channel in the bonded block (or the highest in some older 40MHz rules).
+                // We'll enforce the rule that the primary channel must be a multiple of 4 + 0 or 4 + 2 for the first and second 20MHz block respectively.
+                // For simplicity, we just check if the primary channel is aligned to the start of the block.
+                // A better check: A primary channel must be one of the lowest channels in the block required.
+                
+                // For 40MHz, must be 36 or 40.
+                // For 80MHz, must be 36, 40, 44, or 48. (Must be within the first 4 channels of the 80MHz block).
+                
+                // Let's find the required channels by index for simplicity.
+                let requiredIndexes = [primaryIndex];
+                
+                // For 40MHz, look at index + 1
+                if (bandwidthMHz === 40) {
+                    requiredIndexes.push(primaryIndex + 1);
+                } 
+                // For 80MHz, look at index + 1, + 2, + 3
+                else if (bandwidthMHz === 80) {
+                    requiredIndexes.push(primaryIndex + 1, primaryIndex + 2, primaryIndex + 3);
+                } 
+                // For 160MHz, look at up to index + 7
+                else if (bandwidthMHz === 160) {
+                    for (let i = 1; i < 8; i++) {
+                        requiredIndexes.push(primaryIndex + i);
+                    }
+                }
+                
+                // Filter out non-existent or out-of-band channels
+                const finalIndexes = requiredIndexes.filter(i => CHANNELS[i] && CHANNELS[i].band === CHANNELS[primaryIndex].band);
+                
+                // Check if the number of available channels matches the required count
+                if (finalIndexes.length < requiredChannelsCount) {
+                    return { error: `Not enough sequential channels available in ${CHANNELS[primaryIndex].band} band for a ${bandwidthMHz} MHz bond starting at CH ${primaryChannel}.` };
+                }
+
+                // If bonding, the lowest channel index determines the bonded channels
+                const lowestChannelIndex = Math.min(...finalIndexes);
+                
+                // Re-calculate the bonded channels starting from the lowest index needed for the entire block
+                const lowestBondedChannel = CHANNELS[lowestChannelIndex];
+                let channelsUsed = [];
+
+                for (let i = 0; i < requiredChannelsCount; i++) {
+                    const nextChannel = CHANNELS[lowestChannelIndex + i];
+                    if (nextChannel && nextChannel.band === lowestBondedChannel.band) {
+                        channelsUsed.push(nextChannel.channel);
+                    } else {
+                        // This indicates a break in the band, which we already checked with the length filter
+                        return { error: `Band boundary crossed. Cannot form ${bandwidthMHz} MHz bond starting at CH ${primaryChannel}.` };
+                    }
+                }
+                
+                // The actual primary channel (selected) must be one of the channels in the bonded block.
+                if (!channelsUsed.includes(primaryChannel)) {
+                    // This is for error handling where the selected channel is not part of the valid block structure
+                    return { error: `The selected channel (${primaryChannel}) is not the lowest required channel for this ${bandwidthMHz}MHz bond. Try selecting the first channel of the block.` };
+                }
+                
+                // Calculate the Center Frequency
+                const firstFreq = CHANNELS.find(c => c.channel === channelsUsed[0]).freq;
+                const lastFreq = CHANNELS.find(c => c.channel === channelsUsed[channelsUsed.length - 1]).freq;
+                const centerFreq = (firstFreq + lastFreq) / 2;
+
+                return {
+                    primary: primaryChannel,
+                    bonded: channelsUsed.filter(c => c !== primaryChannel),
+                    channelsUsed: channelsUsed,
+                    centerFreq: centerFreq,
+                    bandwidth: bandwidthMHz
+                };
+            }
+            
+            // Default calculation for 20MHz or a successful bonding block start
+            const channelsUsed = [];
+            for (let i = 0; i < requiredChannelsCount; i++) {
+                const channelData = CHANNELS[primaryIndex + i];
+                if (channelData && channelData.band === CHANNELS[primaryIndex].band) {
+                    channelsUsed.push(channelData.channel);
+                } else {
+                     return { error: `Band boundary crossed or not enough sequential channels available in ${CHANNELS[primaryIndex].band} band for a ${bandwidthMHz} MHz bond.` };
+                }
+            }
+            
+            if (channelsUsed.length < requiredChannelsCount) {
+                 return { error: `Not enough sequential channels available in ${CHANNELS[primaryIndex].band} band for a ${bandwidthMHz} MHz bond.` };
+            }
+
+            // Calculate the Center Frequency for the successful block
+            const firstFreq = CHANNELS.find(c => c.channel === channelsUsed[0]).freq;
+            const lastFreq = CHANNELS.find(c => c.channel === channelsUsed[channelsUsed.length - 1]).freq;
+            const centerFreq = (firstFreq + lastFreq) / 2;
+
+            return {
+                primary: primaryChannel,
+                bonded: channelsUsed.filter(c => c !== primaryChannel),
+                channelsUsed: channelsUsed,
+                centerFreq: centerFreq,
+                bandwidth: bandwidthMHz
+            };
+        }
+
+
+        // --- UI Rendering ---
+
+        function renderChannelMap() {
+            let html = '';
+            let currentBand = '';
+
+            CHANNELS.forEach(c => {
+                if (c.band !== currentBand) {
+                    if (currentBand !== '') {
+                        // End previous band container for clean visual separation
+                        html += `</div>`; 
+                    }
+                    html += `<div class="w-full mt-4 col-span-full"><div class="band-label">${c.band} Band (${CHANNELS.filter(ch => ch.band === c.band).length * 20} MHz available)</div></div>`;
+                    currentBand = c.band;
+                    // Start new grid container for the current band
+                    html += `<div class="channel-grid">`;
+                }
+
+                const isActive = selectedPrimaryChannel === c.channel;
+                const activeClass = isActive ? 'primary' : 'available';
+
+                html += `
+                    <div id="ch-${c.channel}" 
+                         data-channel="${c.channel}" 
+                         data-freq="${c.freq}"
+                         class="channel-cell ${activeClass} ${c.color} border-2" 
+                         onclick="selectPrimaryChannel(${c.channel})">
+                        CH ${c.channel}
+                        <div class="text-xs text-gray-700 font-normal">${c.freq} MHz</div>
+                    </div>
+                `;
+            });
+
+            // Close the final band container
+            html += `</div>`; 
+
+            channelMapElement.innerHTML = html;
+            simulateChannels(); // Re-run simulation after rendering
+        }
+
+        function selectPrimaryChannel(channel) {
+            selectedPrimaryChannel = channel;
+            currentChannelDisplay.textContent = channel;
+            // Re-render the map and simulation to apply new primary channel
+            renderChannelMap(); 
+        }
+
+        function simulateChannels() {
+            clearChannelStyles();
+
+            if (selectedPrimaryChannel === null) {
+                clearLog();
+                log("// Please click a channel (e.g., CH 36) to start the simulation.", 'log-info');
+                return;
+            }
+
+            const bandwidth = parseInt(document.getElementById('bandwidth').value);
+            currentChannelDisplay.textContent = `${selectedPrimaryChannel} (${bandwidth} MHz)`;
+
+            clearLog();
+            log(`// SIMULATING: Primary Channel ${selectedPrimaryChannel} @ ${bandwidth} MHz Bandwidth`, 'log-info');
+
+            const result = calculateChannels(selectedPrimaryChannel, bandwidth);
+
+            if (result.error) {
+                log(`// ERROR: ${result.error}`, 'log-error');
+                // Highlight the invalid primary channel in a red shade
+                const primaryCell = document.getElementById(`ch-${selectedPrimaryChannel}`);
+                if (primaryCell) {
+                    primaryCell.classList.remove('primary');
+                    primaryCell.classList.add('unavailable');
+                }
+                return;
+            }
+
+            log(`// RESULT: Successful ${bandwidth} MHz channel bond.`, 'log-success');
+            log(`- Channels Used: ${result.channelsUsed.join(', ')}`, 'log-info');
+            log(`- Center Frequency: ${result.centerFreq.toFixed(1)} MHz (This is the effective frequency band)`, 'log-info');
+
+            // 1. Highlight Primary Channel
+            const primaryCell = document.getElementById(`ch-${result.primary}`);
+            if (primaryCell) {
+                primaryCell.classList.remove('available', 'secondary');
+                primaryCell.classList.add('primary');
+            }
+
+            // 2. Highlight Secondary/Bonded Channels
+            result.bonded.forEach(ch => {
+                const cell = document.getElementById(`ch-${ch}`);
+                if (cell) {
+                    cell.classList.remove('available', 'primary');
+                    cell.classList.add('secondary');
+                }
+            });
+
+            // Detailed explanation of the bonding rule
+            if (bandwidth > 20) {
+                log(`\n// BONDING RULE EXPLANATION:`, 'log-info');
+                log(`- ${bandwidth} MHz requires ${bandwidth / 20} consecutive 20 MHz channels.`, 'log-info');
+                log(`- The Primary Channel (${result.primary}) is used for control traffic (beacons, ACKs).`, 'log-info');
+                log(`- The remaining channels (${result.bonded.join(', ')}) are used for high-speed data payload.`, 'log-info');
+            }
+        }
+
+        function clearChannelStyles() {
+            CHANNELS.forEach(c => {
+                const cell = document.getElementById(`ch-${c.channel}`);
+                if (cell) {
+                    cell.className = `channel-cell available ${c.color} border-2`;
+                }
+            });
+        }
+
+        // Initialize the map on load
+        window.onload = () => {
+            // Select a default primary channel for a starting example
+            selectedPrimaryChannel = 36; 
+            renderChannelMap();
+        };
+
+    </script>
+</body>
+</html>

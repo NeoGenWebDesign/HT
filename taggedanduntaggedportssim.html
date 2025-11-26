@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VLAN Access vs. Trunk Port Simulation</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Consolas', 'Courier New', monospace;
+            background: linear-gradient(180deg, #353636 50%, #032a36 75%);
+            min-height: 100vh;
+        }
+        a {
+            display: block;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            text-align: center;
+        }
+        .container-card {
+            background-color: white;
+            border-radius: 1.5rem;
+            box-shadow: 0 15px 30px -5px rgba(0, 0, 0, 0.1), 0 5px 15px -5px rgba(0, 0, 0, 0.04);
+            padding: 3rem;
+        }
+        .vis-area {
+            position: relative;
+            height: 450px;
+            width: 100%;
+            border: 2px dashed #cbd5e1;
+            border-radius: 1rem;
+            background-color: #ffffff;
+            overflow: hidden;
+            margin-bottom: 2rem;
+        }
+        
+        /* Switch and Port Styling */
+        .switch {
+            position: absolute;
+            width: 250px;
+            height: 150px;
+            background-color: #1e40af; /* Dark Blue */
+            border-radius: 0.5rem;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 8px 15px rgba(0, 0, 0, 0.3);
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+        }
+        .port {
+            position: absolute;
+            width: 30px;
+            height: 15px;
+            background-color: #3b82f6;
+            border-radius: 3px;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
+            z-index: 11;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .port.access { background-color: #10b981; } /* Green */
+        .port.trunk { background-color: #ef4444; } /* Red */
+        
+        /* Host Styling */
+        .host {
+            position: absolute;
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            background-color: #f97316; /* Orange */
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: bold;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            z-index: 10;
+            transition: transform 0.3s;
+        }
+
+        /* Frame Animation */
+        .frame-packet {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            z-index: 20;
+            opacity: 0;
+            transition: opacity 0.1s, background-color 0.3s, box-shadow 0.3s;
+        }
+        .frame-untagged { background-color: #f97316; } /* Orange */
+        .frame-tagged { 
+            background-color: #ef4444; /* Red */
+            border: 3px solid #f97316; 
+            width: 24px;
+            height: 24px;
+        }
+
+        /* Log Styling */
+        .console-log {
+            min-height: 100px;
+            max-height: 200px;
+            background-color: #111827;
+            color: #d1d5db;
+            font-family: 'Consolas', 'Courier New', monospace;
+            border-radius: 0.75rem;
+            padding: 1rem;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            font-size: 0.85rem;
+        }
+        .log-vlan { color: #60a5fa; } /* Blue for VLAN info */
+        .log-tag { color: #facc15; } /* Yellow for Tagging action */
+        .log-port { color: #f87171; } /* Red/Pink for Port Mode */
+        .flashing { animation: flash-ring 0.4s infinite alternate; }
+        @keyframes flash-ring {
+            from { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.7); }
+            to { box-shadow: 0 0 10px 10px rgba(249, 115, 22, 0); }
+        }
+        
+    </style>
+</head>
+<body class="p-4 md:p-10 min-h-screen">
+
+    <div class="max-w-4xl mx-auto">
+        <h1 class="text-3xl font-extrabold text-orange-500 mb-6 text-center">
+            VLAN Port Modes: Access (Untagged) vs. Trunk (Tagged)
+        </h1>
+        <p class="text-sm text-yellow-500 mb-8 text-center">
+            Press F5 or Reload/Refresh Browser to Reset Simulation.
+        </p>
+        <a id="link" class="text-sm hover:text-lime-500 text-yellow-200 mb-8 text-center" href="index.html">
+            Back to Simulations Index
+        </a>
+
+        <div class="container-card">
+            
+            <div id="vis-area" class="vis-area">
+                <!-- Simulation elements go here -->
+            </div>
+
+            <div class="flex justify-center space-x-4 mb-6">
+                <select id="vlan-select" class="bg-white border border-gray-300 rounded-lg p-3 text-sm shadow-md">
+                    <option value="10">Send Traffic for VLAN 10 (Access)</option>
+                    <option value="20">Send Traffic for VLAN 20 (Trunk)</option>
+                    <option value="30">Send Traffic for VLAN 30 (Trunk)</option>
+                </select>
+                <button onclick="startSimulation()" id="start-btn"
+                        class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg shadow-xl transition duration-150 text-sm disabled:opacity-50">
+                    Run Simulation
+                </button>
+                <button onclick="resetSimulation()" id="reset-btn" disabled
+                        class="bg-gray-400 hover:bg-gray-500 text-white font-bold py-3 px-6 rounded-lg shadow-xl transition duration-150 text-sm disabled:opacity-50">
+                    Reset
+                </button>
+            </div>
+            
+            <h3 class="text-xl font-semibold text-gray-800 mb-3">Simulation Log</h3>
+            <div id="sim-log" class="console-log">
+                <p class="log-port">Setup: SW1 has three ports configured: P1 (Access VLAN 10), P2 (Trunk), P3 (Trunk).</p>
+                <p class="log-vlan">Select a VLAN to send traffic and click 'Run Simulation'.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Network Configuration ---
+        const CONFIG = {
+            SW1: { 
+                x: 500, y: 225, 
+                ports: {
+                    P1: { mode: 'ACCESS', vlan: 10, target: 'HostA', xOffset: -125, yOffset: -75 },
+                    P2: { mode: 'TRUNK', vlan: [20, 30], target: 'SW2-Hypothetical', xOffset: 125, yOffset: -75 },
+                    P3: { mode: 'TRUNK', vlan: [20, 30], target: 'Router-Hypothetical', xOffset: 125, yOffset: 75 }
+                }
+            },
+            HostA: { x: 150, y: 150, vlan: 10, label: 'Host A' },
+            SW2: { x: 850, y: 150, label: 'Downstream Switch' },
+            Router: { x: 850, y: 300, label: 'Router' }
+        };
+
+        const VIS_SIZE = { width: 1000, height: 450 };
+        let isRunning = false;
+        let activeFrame = null; 
+        let animationRequestId;
+        let logLine = 0;
+
+        // --- Utility Functions ---
+
+        function log(message, type = '') {
+            const consoleEl = document.getElementById('sim-log');
+            consoleEl.innerHTML += `<span class="${type}">[${logLine++}]: ${message}</span>\n`;
+            consoleEl.scrollTop = consoleEl.scrollHeight;
+        }
+        
+        function getCoords(id) {
+            if (id === 'SW1') return { x: CONFIG.SW1.x, y: CONFIG.SW1.y };
+            if (id === 'HostA') return { x: CONFIG.HostA.x, y: CONFIG.HostA.y };
+            if (id === 'SW2-Hypothetical') return { x: CONFIG.SW2.x, y: CONFIG.SW2.y };
+            if (id === 'Router-Hypothetical') return { x: CONFIG.Router.x, y: CONFIG.Router.y };
+            return { x: 0, y: 0 };
+        }
+
+        // --- Visualization Setup ---
+        
+        function initializeVisualization() {
+            const container = document.getElementById('vis-area');
+            container.innerHTML = '';
+            
+            // 1. Draw Links
+            drawLink(CONFIG.HostA, CONFIG.SW1.ports.P1, container, 'Link-A-1');
+            drawLink(CONFIG.SW1.ports.P2, CONFIG.SW2, container, 'Link-1-2');
+            drawLink(CONFIG.SW1.ports.P3, CONFIG.Router, container, 'Link-1-3');
+
+            // 2. Draw Network Devices
+            drawDevice('SW1', CONFIG.SW1.x, CONFIG.SW1.y, container, 'switch', 'SW1');
+            drawDevice('HostA', CONFIG.HostA.x, CONFIG.HostA.y, container, 'host', 'Host A (VLAN 10)');
+            drawDevice('SW2', CONFIG.SW2.x, CONFIG.SW2.y, container, 'host', 'Downstream Switch');
+            drawDevice('Router', CONFIG.Router.x, CONFIG.Router.y, container, 'host', 'Router');
+
+            // 3. Draw Ports
+            Object.entries(CONFIG.SW1.ports).forEach(([portId, portConfig]) => {
+                drawPort(portId, portConfig, container);
+            });
+        }
+        
+        function drawDevice(id, x, y, container, type, label) {
+            const el = document.createElement('div');
+            el.id = id;
+            el.className = type === 'switch' ? 'switch' : 'host';
+            el.style.left = `${x - (type === 'switch' ? 125 : 35)}px`; 
+            el.style.top = `${y - (type === 'switch' ? 75 : 35)}px`; 
+            
+            el.innerHTML = `
+                <div class="${type === 'switch' ? 'text-2xl font-bold' : 'text-md'}">${label}</div>
+                ${type === 'switch' ? '<div class="text-xs mt-1">L2 Switch</div>' : ''}
+            `;
+            container.appendChild(el);
+        }
+
+        function drawPort(portId, config, container) {
+            const swX = CONFIG.SW1.x;
+            const swY = CONFIG.SW1.y;
+            
+            const el = document.createElement('div');
+            el.id = portId;
+            el.className = `port ${config.mode.toLowerCase()}`;
+            el.style.left = `${swX + config.xOffset}px`;
+            el.style.top = `${swY + config.yOffset}px`;
+            el.title = `${portId}: ${config.mode} | VLANs: ${config.vlan}`;
+            
+            const labelEl = document.createElement('div');
+            labelEl.className = 'absolute text-xs font-semibold text-gray-700 -translate-x-1/2 mt-4';
+            labelEl.style.left = `${swX + config.xOffset + 15}px`;
+            labelEl.style.top = `${swY + config.yOffset + 5}px`;
+            labelEl.innerHTML = `${portId} <span class="font-normal text-xs text-gray-500">(${config.mode.charAt(0)})</span>`;
+            
+            container.appendChild(el);
+            container.appendChild(labelEl);
+        }
+        
+        function drawLink(startConfig, endConfig, container, linkId) {
+            let start, end, isTrunk = false;
+
+            if (startConfig.label === 'Host A') {
+                start = getCoords('HostA');
+                end = { x: CONFIG.SW1.x + endConfig.xOffset + 15, y: CONFIG.SW1.y + endConfig.yOffset + 7.5 };
+                isTrunk = false;
+            } else {
+                start = { x: CONFIG.SW1.x + startConfig.xOffset + 15, y: CONFIG.SW1.y + startConfig.yOffset + 7.5 };
+                if (endConfig.label === 'Downstream Switch') {
+                    end = getCoords('SW2-Hypothetical');
+                } else {
+                    end = getCoords('Router-Hypothetical');
+                }
+                isTrunk = true;
+            }
+
+            const dx = end.x - start.x;
+            const dy = end.y - start.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+            
+            const linkEl = document.createElement('div');
+            linkEl.className = 'link absolute h-3 rounded-full';
+            linkEl.id = linkId;
+            linkEl.style.width = `${distance}px`;
+            linkEl.style.left = `${start.x}px`;
+            linkEl.style.top = `${start.y}px`;
+            linkEl.style.transform = `rotate(${angle}deg)`;
+            linkEl.style.backgroundColor = isTrunk ? '#f87171' : '#4ade80'; // Red/Pink for Trunk, Light Green for Access
+            linkEl.style.zIndex = 5;
+            
+            container.appendChild(linkEl);
+        }
+
+
+        function createFrame(vlan, isTagged) {
+            const container = document.getElementById('vis-area');
+            const frameEl = document.createElement('div');
+            frameEl.className = `frame-packet ${isTagged ? 'frame-tagged' : 'frame-untagged'}`;
+            frameEl.style.opacity = '1';
+            frameEl.dataset.vlan = vlan;
+            frameEl.dataset.isTagged = isTagged;
+            
+            // Start position near HostA for Access/Trunk P2
+            const startX = vlan === 10 ? CONFIG.HostA.x : CONFIG.SW1.x;
+            const startY = vlan === 10 ? CONFIG.HostA.y : CONFIG.SW1.y;
+
+            frameEl.style.left = `${startX - 10}px`;
+            frameEl.style.top = `${startY - 10}px`;
+
+            container.appendChild(frameEl);
+            
+            activeFrame = {
+                element: frameEl,
+                vlan: vlan,
+                isTagged: isTagged,
+                progress: 0,
+                path: [],
+                currentStep: 0
+            };
+            return activeFrame;
+        }
+
+        // --- Simulation Logic ---
+
+        function startSimulation() {
+            if (isRunning) return;
+            isRunning = true;
+            document.getElementById('start-btn').disabled = true;
+            document.getElementById('reset-btn').disabled = false;
+            document.querySelectorAll('.host, .switch, .port').forEach(el => el.classList.remove('flashing'));
+
+            logLine = 0;
+            document.getElementById('sim-log').innerHTML = '';
+            
+            const selectedVLAN = parseInt(document.getElementById('vlan-select').value);
+            
+            if (selectedVLAN === 10) {
+                // ACCESS PORT SCENARIO (Host A -> SW1 P1)
+                log(`SCENARIO 1: Host A sends traffic for VLAN 10.`, 'log-vlan');
+                log(`Host A is connected to SW1 Port P1, which is configured as an <span class="log-port">Access Port for VLAN 10</span>.`, 'log-port');
+                
+                const frame = createFrame(10, false);
+                frame.path = [
+                    { x: CONFIG.HostA.x, y: CONFIG.HostA.y }, // Start
+                    { x: CONFIG.SW1.x + CONFIG.SW1.ports.P1.xOffset, y: CONFIG.SW1.y + CONFIG.SW1.ports.P1.yOffset + 7.5 } // End at P1
+                ];
+                
+                document.getElementById('HostA').classList.add('flashing');
+                
+            } else if (selectedVLAN === 20 || selectedVLAN === 30) {
+                // TRUNK PORT SCENARIO (SW1 P2 or P3)
+                log(`SCENARIO 2: SW1 must send traffic for VLAN ${selectedVLAN} out a Trunk Port.`, 'log-vlan');
+                log(`Traffic for VLAN ${selectedVLAN} must traverse the <span class="log-port">Trunk Port (P2 or P3)</span> to a downstream device.`, 'log-port');
+                
+                const portId = 'P2'; // Use P2 for demonstration
+                const portConfig = CONFIG.SW1.ports[portId];
+                
+                log(`SW1: Since Port ${portId} is a TRUNK, the frame must be TAGGED with 802.1Q.`, 'log-tag');
+
+                const frame = createFrame(selectedVLAN, true);
+                
+                // Starting right at the switch center for visualization clarity
+                frame.element.style.left = `${CONFIG.SW1.x - 12}px`;
+                frame.element.style.top = `${CONFIG.SW1.y - 12}px`;
+
+                frame.path = [
+                    { x: CONFIG.SW1.x, y: CONFIG.SW1.y }, // Start (Center of Switch)
+                    { x: CONFIG.SW1.x + portConfig.xOffset, y: CONFIG.SW1.y + portConfig.yOffset + 7.5 }, // Exit P2
+                    { x: CONFIG.SW2.x, y: CONFIG.SW2.y } // End at Downstream Switch
+                ];
+            }
+
+            if (activeFrame) {
+                animatePorts();
+            } else {
+                isRunning = false;
+                document.getElementById('start-btn').disabled = false;
+            }
+        }
+
+        function animatePorts() {
+            if (!isRunning || !activeFrame) return;
+
+            const speed = 0.01; 
+            const frame = activeFrame;
+            
+            frame.progress += speed;
+            
+            // Transition logic between path steps
+            if (frame.path.length > frame.currentStep + 1) {
+                const start = frame.path[frame.currentStep];
+                const end = frame.path[frame.currentStep + 1];
+                
+                // Determine normalized progress for the current step
+                const dx_total = end.x - start.x;
+                const dy_total = end.y - start.y;
+                
+                let currentX = start.x + dx_total * frame.progress;
+                let currentY = start.y + dy_total * frame.progress;
+
+                // Adjust frame position
+                frame.element.style.left = `${currentX - (frame.isTagged ? 12 : 10)}px`; 
+                frame.element.style.top = `${currentY - (frame.isTagged ? 12 : 10)}px`;
+
+                
+                // --- Key Transition Points ---
+                if (frame.progress >= 0.5 && frame.currentStep === 0 && frame.vlan === 10) {
+                    // ACCESS SCENARIO: Host to P1 (Ingress)
+                    document.getElementById('SW1').classList.add('flashing');
+                    document.getElementById('P1').classList.add('flashing');
+                    log(`SW1: Received frame on Access Port P1. It is <span class="log-tag">UNTTAGGED</span> and assumed to be VLAN 10. Frame accepted.`, 'log-vlan');
+                    frame.currentStep = 1; // Move to the end state
+                    frame.progress = 0.0; // Reset progress for the next segment (though none in this scenario)
+
+                } else if (frame.progress >= 0.2 && frame.currentStep === 0 && frame.vlan !== 10) {
+                    // TRUNK SCENARIO: Switch Internal processing to P2/P3 (Egress)
+                    document.getElementById('SW1').classList.add('flashing');
+                    document.getElementById('P2').classList.add('flashing');
+                    log(`SW1: Traffic for VLAN ${frame.vlan} being sent to Trunk Port P2.`, 'log-vlan');
+                    log(`The frame is TAGGED (802.1Q) with VLAN ID ${frame.vlan} for transmission.`, 'log-tag');
+                    frame.currentStep = 1;
+                    frame.progress = 0.0; // Reset progress for trunk travel
+
+                } else if (frame.progress >= 1.0 && frame.currentStep === 1 && frame.vlan !== 10) {
+                    // TRUNK SCENARIO: Frame reaches downstream device
+                    document.getElementById('SW2').classList.add('flashing');
+                    log(`SW2 (Downstream Switch) receives the <span class="log-tag">TAGGED</span> frame on its trunk port.`, 'log-vlan');
+                    log(`SW2 reads the 802.1Q tag (${frame.vlan}) and knows exactly which VLAN the frame belongs to.`, 'log-tag');
+                    frame.currentStep = 2; // Move to the end state
+                    frame.progress = 0.0;
+
+                } else if (frame.progress >= 1.0 && frame.currentStep === 0 && frame.vlan === 10) {
+                     // ACCESS SCENARIO: Frame reaches P1
+                    // This is the end for Host A traffic as it can't go anywhere else
+                    stopSimulation(true);
+                    return;
+                }
+            } 
+            
+            // Check if simulation is complete (last point reached)
+            if (frame.vlan !== 10 && frame.currentStep === 2) {
+                stopSimulation(true);
+                return;
+            }
+
+            animationRequestId = requestAnimationFrame(animatePorts);
+        }
+
+        function stopSimulation(success = false) {
+            isRunning = false;
+            if (animationRequestId) {
+                cancelAnimationFrame(animationRequestId);
+            }
+            
+            if (activeFrame) {
+                activeFrame.element.remove();
+                activeFrame = null;
+            }
+            
+            if (success) {
+                log(`--- Simulation Complete ---`, 'log-tag');
+            } else {
+                log(`Simulation stopped prematurely.`, 'log-port');
+            }
+            
+            document.getElementById('start-btn').textContent = 'Simulation Complete';
+            document.getElementById('start-btn').disabled = true;
+            document.getElementById('reset-btn').disabled = false;
+            document.querySelectorAll('.host, .switch, .port').forEach(el => el.classList.remove('flashing'));
+        }
+
+        function resetSimulation() {
+            stopSimulation(false);
+            logLine = 0;
+            document.getElementById('sim-log').innerHTML = '<p class="log-port">Simulation Reset. Select a VLAN and click Run Simulation.</p>';
+            document.getElementById('start-btn').disabled = false;
+            document.getElementById('start-btn').textContent = 'Run Simulation';
+            document.getElementById('reset-btn').disabled = true;
+        }
+        
+        // --- Event Listeners and Initial Setup ---
+        
+        window.addEventListener('load', initializeVisualization);
+        window.addEventListener('resize', initializeVisualization);
+
+    </script>
+</body>
+</html>

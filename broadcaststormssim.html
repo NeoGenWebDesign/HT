@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Layer 2 Broadcast Flooding Simulator</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Consolas', 'Courier New', monospace;
+            background: linear-gradient(180deg, #353636 50%, #032a36 75%);
+            min-height: 100vh;
+        }
+        a {
+            display: block;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            text-align: center;
+        }
+        .container-card {
+            background-color: white;
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+            padding: 2rem;
+        }
+        .vis-area {
+            position: relative;
+            height: 350px;
+            width: 100%;
+            margin-bottom: 2rem;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.75rem;
+            background-color: #f9fafb;
+        }
+        .network-device {
+            position: absolute;
+            width: 90px;
+            height: 90px;
+            border-radius: 0.75rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.875rem;
+            font-weight: bold;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            z-index: 10;
+        }
+        .switch {
+            background-color: #1d4ed8; /* Darker Blue */
+            color: white;
+            border: 2px solid #3b82f6;
+        }
+        .host {
+            background-color: #059669; /* Darker Green */
+            color: white;
+            border: 2px solid #10b981;
+        }
+        .link {
+            position: absolute;
+            height: 3px;
+            background-color: #94a3b8;
+            transform-origin: 0 0;
+            z-index: 5;
+        }
+        .frame-packet {
+            position: absolute;
+            width: 15px;
+            height: 15px;
+            background-color: #f97316; /* Orange for frames */
+            border-radius: 50%;
+            z-index: 20;
+            opacity: 0;
+            transition: opacity 0.1s;
+        }
+        .flashing {
+            animation: pulse-flash 0.5s infinite alternate;
+        }
+        @keyframes pulse-flash {
+            from { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.7); }
+            to { box-shadow: 0 0 10px 10px rgba(249, 115, 22, 0); }
+        }
+        .console-log {
+            min-height: 120px;
+            max-height: 250px;
+            background-color: #1f2937;
+            color: #d1d5db;
+            font-family: 'Consolas', 'Courier New', monospace;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            font-size: 0.85rem;
+        }
+        .log-broadcast { color: #fcd34d; }
+        .log-mac { color: #60a5fa; }
+    </style>
+</head>
+<body class="p-4 md:p-10 min-h-screen">
+
+    <div class="max-w-4xl mx-auto">
+        <h1 class="text-3xl font-extrabold text-orange-500 mb-2 text-center">
+            Layer 2 Broadcast Flooding (The Precursor to a Storm)
+        </h1>
+        <p class="text-lg text-white mb-6 text-center">
+            This simulation explains the normal Layer 2 **Flooding** process—how a switch handles a broadcast frame.
+        </p>
+        <p class="text-sm text-yellow-500 mb-8 text-center">
+            Press F5 or Reload/Refresh Browser to Reset Simulation.
+        </p>
+        <a id="link" class="text-sm hover:text-lime-500 text-yellow-200 mb-8 text-center" href="index.html">
+            Back to Simulations Index
+        </a>
+
+        <div class="container-card">
+            <h3 class="text-xl font-semibold text-gray-800 mb-3">
+                Concept: Broadcast Flooding
+            </h3>
+            <p class="text-sm text-gray-700 mb-4">
+                When a switch receives an Ethernet frame with a destination MAC address of `FFFF.FFFF.FFFF` (a broadcast address), it must forward that frame out of **every single port** on the switch, except the port it was received on. This is called **Flooding**.
+                <ul class="list-disc list-inside ml-4 mt-1 text-sm">
+                    <li><span class="text-indigo-600 font-semibold">Purpose:</span> Used for protocols like ARP and DHCP to find unknown hosts.</li>
+                    <li><span class="text-red-600 font-semibold">Danger:</span> If a physical loop exists in the network, this process repeats infinitely, leading to a **Broadcast Storm** (as shown in the previous simulation).</li>
+                </ul>
+            </p>
+
+            <!-- Simulation Area -->
+            <div id="vis-area" class="vis-area">
+                <!-- Nodes and Links will be injected here -->
+            </div>
+
+            <div class="flex justify-center space-x-4 mb-6">
+                <button onclick="startBroadcast()" id="start-btn"
+                        class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg shadow-xl transition duration-150 text-center text-sm disabled:opacity-50">
+                    Send Broadcast (ARP Request)
+                </button>
+                <button onclick="resetSimulation()" id="reset-btn" disabled
+                        class="bg-gray-400 hover:bg-gray-500 text-white font-bold py-3 px-6 rounded-lg shadow-xl transition duration-150 text-center text-sm disabled:opacity-50">
+                    Reset
+                </button>
+            </div>
+
+            <h3 class="text-xl font-semibold text-gray-800 mb-3">Simulation Log</h3>
+            <div id="sim-log" class="console-log">
+                <p class="log-mac">Setup: A small network with Host A, Host B, and Switch 1.</p>
+                <p class="log-mac">The goal is to send a broadcast frame from Host A to demonstrate normal Layer 2 flooding.</p>
+                <p class="log-mac">Click 'Send Broadcast (ARP Request)' to begin.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Network Topology ---
+        const TOPOLOGY = {
+            HostA: { id: 'HostA', mac: '00:0A', x: 100, y: 175, type: 'host', links: ['SW1'] },
+            SW1: { id: 'SW1', mac: '00:S1', x: 400, y: 175, type: 'switch', links: ['HostA', 'HostB', 'HostC'] },
+            HostB: { id: 'HostB', mac: '00:0B', x: 700, y: 75, type: 'host', links: ['SW1'] },
+            HostC: { id: 'HostC', mac: '00:0C', x: 700, y: 275, type: 'host', links: ['SW1'] }
+        };
+        
+        // Defines the visual links and their associated nodes
+        const LINKS = [
+            { id: 'Link-A-1', from: 'HostA', to: 'SW1' },
+            { id: 'Link-1-B', from: 'SW1', to: 'HostB' },
+            { id: 'Link-1-C', from: 'SW1', to: 'HostC' }
+        ];
+
+        let isRunning = false;
+        let activeFrames = []; // Stores frame objects {id, linkId, progress, direction, status}
+        let animationRequestId;
+        let logLine = 0;
+
+        // --- Utility Functions ---
+
+        /** Logs a message to the console element */
+        function log(message, type = '') {
+            const consoleEl = document.getElementById('sim-log');
+            consoleEl.innerHTML += `<span class="${type}">${logLine++}: ${message}</span>\n`;
+            consoleEl.scrollTop = consoleEl.scrollHeight;
+        }
+
+        /** Clears and draws the network topology */
+        function initializeVisualization() {
+            const container = document.getElementById('vis-area');
+            container.innerHTML = '';
+            const { width, height } = container.getBoundingClientRect();
+            
+            // Normalize coordinates based on container size
+            const scaleX = width / 800;
+            const scaleY = height / 350; 
+
+            // 1. Draw Links
+            LINKS.forEach(link => {
+                drawLink(link.from, link.to, scaleX, scaleY, container, link.id);
+            });
+
+            // 2. Draw Nodes
+            Object.keys(TOPOLOGY).forEach(id => {
+                const data = TOPOLOGY[id];
+                const x = data.x * scaleX;
+                const y = data.y * scaleY;
+                
+                const el = document.createElement('div');
+                el.className = `network-device ${data.type}`;
+                el.id = id;
+                // Center the device element
+                el.style.left = `${x - 45}px`; 
+                el.style.top = `${y - 45}px`; 
+                el.innerHTML = `
+                    <div class="text-xl">${id}</div>
+                    <div class="text-xs">MAC: ${data.mac}</div>
+                `;
+                container.appendChild(el);
+            });
+        }
+        
+        /** Draws a connection line between two nodes */
+        function drawLink(id1, id2, scaleX, scaleY, container, linkId) {
+            const start = { x: TOPOLOGY[id1].x * scaleX, y: TOPOLOGY[id1].y * scaleY };
+            const end = { x: TOPOLOGY[id2].x * scaleX, y: TOPOLOGY[id2].y * scaleY };
+            
+            const dx = end.x - start.x;
+            const dy = end.y - start.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+            
+            const linkEl = document.createElement('div');
+            linkEl.className = 'link';
+            linkEl.id = linkId;
+            linkEl.dataset.from = id1;
+            linkEl.dataset.to = id2;
+            linkEl.style.width = `${distance}px`;
+            linkEl.style.left = `${start.x}px`;
+            linkEl.style.top = `${start.y}px`;
+            linkEl.style.transform = `rotate(${angle}deg)`;
+            
+            container.appendChild(linkEl);
+        }
+
+        /** Creates a visual frame element */
+        function createFrame(linkId) {
+            const linkEl = document.getElementById(linkId);
+            if (!linkEl) return;
+            
+            const container = document.getElementById('vis-area');
+            const frameEl = document.createElement('div');
+            const frameId = `frame-${Date.now()}-${Math.random()}`;
+            frameEl.className = 'frame-packet';
+            frameEl.id = frameId;
+            frameEl.style.opacity = '1';
+
+            container.appendChild(frameEl);
+            
+            const frame = {
+                id: frameId,
+                element: frameEl,
+                linkId: linkId,
+                progress: 0,
+                // Note: Direction is always calculated from 'from' to 'to' based on TOPOLOGY
+            };
+            activeFrames.push(frame);
+            return frame;
+        }
+
+        /** Broadcasts a frame from Host A */
+        function startBroadcast() {
+            if (isRunning) return;
+            isRunning = true;
+            document.getElementById('start-btn').disabled = true;
+            document.getElementById('reset-btn').disabled = false;
+            
+            logLine = 0;
+            document.getElementById('sim-log').innerHTML = '';
+            
+            log(`Host A (MAC: ${TOPOLOGY.HostA.mac}) sends ARP Request (Broadcast: FFFF.FFFF.FFFF)`, 'log-broadcast');
+            
+            // Initial frame from HostA to SW1
+            createFrame('Link-A-1'); 
+            document.getElementById('HostA').classList.add('flashing');
+            
+            animateFlooding();
+        }
+
+        // --- Flooding Simulation Logic ---
+        
+        function processSwitch(frame) {
+            const linkEl = document.getElementById(frame.linkId);
+            const ingressPort = frame.linkId;
+            const sourceNodeId = linkEl.dataset.from; 
+            const destinationNodeId = linkEl.dataset.to;
+
+            if (destinationNodeId === 'SW1') {
+                document.getElementById('SW1').classList.add('flashing');
+                log(`SW1: Received Broadcast on link ${ingressPort}.`, 'log-broadcast');
+                log(`SW1: Learning MAC ${TOPOLOGY.HostA.mac} on port connected to ${sourceNodeId}.`, 'log-mac');
+
+                // Flooding: Send out all ports *except* the ingress port (Link-A-1)
+                const floodLinks = LINKS.filter(link => link.id !== ingressPort);
+
+                log(`SW1: Flooding Broadcast frame out of ${floodLinks.length} ports (to Host B and Host C).`, 'log-broadcast');
+                
+                floodLinks.forEach(link => {
+                    createFrame(link.id);
+                });
+            } 
+            // Remove the frame that was just processed by the switch
+            frame.element.remove();
+            activeFrames = activeFrames.filter(f => f.id !== frame.id);
+        }
+
+        function processHost(frame) {
+            const linkEl = document.getElementById(frame.linkId);
+            const destinationNodeId = linkEl.dataset.to;
+            
+            document.getElementById(destinationNodeId).classList.add('flashing');
+            log(`${destinationNodeId}: Received Broadcast frame. (MAC: ${TOPOLOGY.HostA.mac})`, 'log-broadcast');
+            log(`${destinationNodeId}: Processing ARP Request. Since the destination is Broadcast, the frame is accepted and processed.`, 'log-mac');
+            
+            // Remove the frame that reached the host
+            frame.element.remove();
+            activeFrames = activeFrames.filter(f => f.id !== frame.id);
+        }
+
+        function animateFlooding() {
+            if (!isRunning) return;
+
+            const speed = 0.05; // speed of packet movement
+            const framesToProcess = [...activeFrames]; // Process a copy to allow modification of activeFrames array
+            
+            framesToProcess.forEach(frame => {
+                frame.progress += speed;
+                
+                const linkEl = document.getElementById(frame.linkId);
+                const linkRect = linkEl.getBoundingClientRect();
+                
+                const linkLength = parseFloat(linkEl.style.width);
+                const angle = parseFloat(linkEl.style.transform.match(/rotate\(([^)]+)/)[1]) * (Math.PI / 180);
+
+                const travelDistance = linkLength * frame.progress;
+                
+                const baseX = parseFloat(linkEl.style.left);
+                const baseY = parseFloat(linkEl.style.top);
+                
+                // Calculate frame position
+                const dx = Math.cos(angle) * travelDistance;
+                const dy = Math.sin(angle) * travelDistance;
+                
+                frame.element.style.left = `${baseX + dx - 7.5}px`; 
+                frame.element.style.top = `${baseY + dy - 7.5}px`;
+
+                // If frame reached the end of the link
+                if (frame.progress >= 1.0) {
+                    const destinationId = linkEl.dataset.to;
+                    const destinationType = TOPOLOGY[destinationId].type;
+                    
+                    if (destinationType === 'switch') {
+                        processSwitch(frame);
+                    } else if (destinationType === 'host') {
+                        processHost(frame);
+                    }
+                    
+                    // Stop animation if all frames have finished
+                    if (activeFrames.length === 0) {
+                        stopFlooding();
+                        return;
+                    }
+                }
+            });
+
+            if (activeFrames.length > 0) {
+                animationRequestId = requestAnimationFrame(animateFlooding);
+            }
+        }
+
+        function stopFlooding() {
+            isRunning = false;
+            document.getElementById('start-btn').textContent = 'Broadcast Complete';
+            document.getElementById('start-btn').disabled = true;
+            document.getElementById('reset-btn').disabled = false;
+            log('Simulation Finished: All broadcast frames were delivered successfully.', 'log-mac');
+
+            // Remove flashing class from all devices
+            document.querySelectorAll('.network-device').forEach(el => el.classList.remove('flashing'));
+        }
+
+        function resetSimulation() {
+            if (animationRequestId) {
+                cancelAnimationFrame(animationRequestId);
+            }
+            isRunning = false;
+            
+            activeFrames.forEach(f => f.element.remove());
+            activeFrames = [];
+            
+            logLine = 0;
+            document.getElementById('sim-log').innerHTML = '<p class="log-mac">Simulation Reset. Click the button to send a new broadcast.</p>';
+            
+            document.getElementById('start-btn').disabled = false;
+            document.getElementById('start-btn').textContent = 'Send Broadcast (ARP Request)';
+            document.getElementById('reset-btn').disabled = true;
+
+            document.querySelectorAll('.network-device').forEach(el => el.classList.remove('flashing'));
+            initializeVisualization(); // Re-render initial state
+        }
+        
+        // --- Event Listeners and Initial Setup ---
+        
+        window.addEventListener('load', initializeVisualization);
+        window.addEventListener('resize', initializeVisualization);
+
+    </script>
+</body>
+</html>

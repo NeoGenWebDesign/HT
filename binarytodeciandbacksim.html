@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Binary/Decimal Conversion Simulator</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Consolas', 'Courier New', monospace;
+            background: linear-gradient(180deg, #353636 50%, #032a36 75%);
+            min-height: 100vh;
+        }
+        a {
+            display: block;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            text-align: center;
+        }
+        .card {
+            background-color: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        .header-section {
+            background-color: #7a0492; /* Indigo 700 */
+            color: white;
+            border-top-left-radius: 0.75rem;
+            border-top-right-radius: 0.75rem;
+        }
+        .explanation-box {
+            background-color: #eef2ff; /* Indigo 50 */
+            border-left: 4px solid #49a8f7;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-12 min-h-screen">
+
+    <div class="max-w-7xl mx-auto">
+        <h1 class="text-4xl font-extrabold text-orange-500 mb-2 text-center">
+            Binary & Decimal Conversion Explainer
+        </h1>
+        <p class="text-xl text-white mb-8 text-center font-bold">
+            Interactive tool to visualize number base conversion and methodology.
+        </p>
+        <p class="text-sm text-yellow-500 mb-8 text-center">
+            Press F5 or Reload/Refresh Browser to Reset Simulation.
+        </p>
+        <a id="link" class="text-sm hover:text-lime-500 text-yellow-200 mb-8 text-center" href="index.html">
+            Back to Simulations Index
+        </a>
+
+        <!-- Main Conversion Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+
+            <!-- 1. Binary to Decimal Converter -->
+            <div class="card">
+                <div class="header-section p-4 text-center">
+                    <h3 class="text-2xl font-semibold">Binary (Base 2) to Decimal (Base 10)</h3>
+                </div>
+                <div class="p-6 space-y-5">
+                    
+                    <div class="input-group">
+                        <label for="binary-input" class="block text-lg font-semibold text-gray-700 mb-1">Enter Binary Number</label>
+                        <input type="text" id="binary-input" value="101101" onkeyup="this.value = this.value.replace(/[^01]/g, '')" class="w-full p-3 border-2 border-indigo-300 rounded-lg text-xl font-mono tracking-widest focus:ring-indigo-500 focus:border-indigo-500" placeholder="e.g., 101101">
+                        <p class="text-sm text-gray-500 mt-1">Only 0s and 1s allowed.</p>
+                    </div>
+
+                    <button onclick="convertFromBinary()" class="w-full bg-purple-600 hover:bg-pink-700 text-white font-bold py-3 rounded-lg shadow-md transition duration-150">
+                        Convert to Decimal
+                    </button>
+
+                    <!-- Result & Explanation -->
+                    <div class="mt-4">
+                        <p class="text-md font-semibold text-gray-700 mb-2">Decimal Result:</p>
+                        <code id="decimal-output" class="block bg-green-100 text-green-800 p-3 rounded-lg text-2xl font-extrabold text-center">
+                            0
+                        </code>
+                    </div>
+
+                    <div class="mt-6">
+                        <p class="text-md font-semibold text-gray-700 mb-2 border-b pb-1">Step-by-Step Explanation (Powers of 2):</p>
+                        <div id="binary-explanation" class="explanation-box min-h-[100px] text-gray-800">
+                            The method involves multiplying each bit by its positional weight ($2^n$).
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- 2. Decimal to Binary Converter -->
+            <div class="card">
+                <div class="header-section p-4 text-center bg-lime-600">
+                    <h3 class="text-2xl font-semibold">Decimal (Base 10) to Binary (Base 2)</h3>
+                </div>
+                <div class="p-6 space-y-5">
+                    <div class="input-group">
+                        <label for="decimal-input" class="block text-lg font-semibold text-gray-700 mb-1">Enter Decimal Number</label>
+                        <input type="number" id="decimal-input" value="45" min="0" oninput="this.value=Math.abs(Math.round(this.value))" class="w-full p-3 border-2 border-green-300 rounded-lg text-xl font-mono tracking-widest focus:ring-green-500 focus:border-green-500" placeholder="e.g., 45">
+                        <p class="text-sm text-gray-500 mt-1">Only positive integers allowed.</p>
+                    </div>
+
+                    <button onclick="convertFromDecimal()" class="w-full bg-lime-600 hover:bg-yellow-800 text-white font-bold py-3 rounded-lg shadow-md transition duration-150">
+                        Convert to Binary
+                    </button>
+
+                    <!-- Result & Explanation -->
+                    <div class="mt-4">
+                        <p class="text-md font-semibold text-gray-700 mb-2">Binary Result:</p>
+                        <code id="binary-output" class="block bg-indigo-100 text-indigo-800 p-3 rounded-lg text-2xl font-extrabold text-center">
+                            0
+                        </code>
+                    </div>
+
+                    <div class="mt-6">
+                        <p class="text-md font-semibold text-gray-700 mb-2 border-b pb-1">Step-by-Step Explanation (Repeated Division):</p>
+                        <div id="decimal-explanation" class="explanation-box min-h-[100px] text-lime-600">
+                            The method involves repeatedly dividing the decimal number by 2 and recording the remainders. The binary result is the sequence of remainders read from bottom to top.
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Core Conversion Functions ---
+
+        /**
+         * Converts a binary string to a decimal integer and generates the explanation.
+         */
+        function convertFromBinary() {
+            const binaryInput = document.getElementById('binary-input').value.trim();
+            const outputElement = document.getElementById('decimal-output');
+            const explanationElement = document.getElementById('binary-explanation');
+
+            if (!/^[01]+$/.test(binaryInput) || binaryInput === "") {
+                outputElement.textContent = "Invalid Binary Input";
+                explanationElement.innerHTML = `<p class="text-red-600">Please enter a valid binary string (containing only 0s and 1s).</p>`;
+                return;
+            }
+
+            let decimalValue = 0;
+            let explanation = `<h4 class="font-bold mb-2">Calculation for $${binaryInput}_2$:</h4>`;
+            explanation += `<div class="font-mono text-sm space-y-1">`;
+
+            // Reverse the string for easier position tracking (right-to-left, $2^0, 2^1, \dots$)
+            const reversedBinary = binaryInput.split('').reverse().join('');
+            
+            for (let i = 0; i < reversedBinary.length; i++) {
+                const bit = parseInt(reversedBinary[i]);
+                const power = i;
+                const weight = Math.pow(2, power);
+                
+                decimalValue += bit * weight;
+
+                explanation += `
+                    <div class="flex justify-between items-center py-1 border-b border-indigo-200 last:border-b-0">
+                        <span class="text-gray-600">Position ${power}:</span>
+                        <code class="font-bold">${bit} \times 2^{${power}} = ${bit * weight}</code>
+                    </div>
+                `;
+            }
+
+            explanation += `</div>`;
+            explanation += `<p class="mt-4 font-bold text-lg">Total Sum: ${decimalValue}</p>`;
+
+            outputElement.textContent = decimalValue;
+            explanationElement.innerHTML = explanation;
+        }
+
+        /**
+         * Converts a decimal integer to a binary string and generates the explanation.
+         */
+        function convertFromDecimal() {
+            let decimalInput = parseInt(document.getElementById('decimal-input').value);
+            const outputElement = document.getElementById('binary-output');
+            const explanationElement = document.getElementById('decimal-explanation');
+
+            if (isNaN(decimalInput) || decimalInput < 0) {
+                outputElement.textContent = "Invalid Decimal Input";
+                explanationElement.innerHTML = `<p class="text-red-600">Please enter a valid positive integer.</p>`;
+                return;
+            }
+
+            if (decimalInput === 0) {
+                outputElement.textContent = "0";
+                explanationElement.innerHTML = `<p>The decimal number 0 is simply $0_2$.</p>`;
+                return;
+            }
+
+            let binaryResult = [];
+            let currentNumber = decimalInput;
+            let explanation = `<h4 class="font-bold mb-2">Calculation for $${decimalInput}_{10}$ (Repeated Division by 2):</h4>`;
+            explanation += `<table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-indigo-100 text-indigo-800">
+                        <th class="p-2 border border-indigo-300">Division</th>
+                        <th class="p-2 border border-indigo-300">Result (Quotient)</th>
+                        <th class="p-2 border border-indigo-300">Remainder (Binary Bit)</th>
+                    </tr>
+                </thead>
+                <tbody class="font-mono">`;
+
+            while (currentNumber > 0) {
+                const quotient = Math.floor(currentNumber / 2);
+                const remainder = currentNumber % 2;
+                
+                // Add row to explanation table
+                explanation += `
+                    <tr>
+                        <td class="p-2 border border-indigo-200">${currentNumber} $\div$ 2</td>
+                        <td class="p-2 border border-indigo-200">${quotient}</td>
+                        <td class="p-2 border border-indigo-200 font-bold text-lg">${remainder}</td>
+                    </tr>
+                `;
+
+                binaryResult.unshift(remainder); // Add remainder to the beginning of the array
+                currentNumber = quotient;
+            }
+
+            const binaryStr = binaryResult.join('');
+            explanation += `</tbody></table>`;
+            explanation += `<p class="mt-4 text-center font-bold text-lg">Read remainders from bottom to top: $\implies$ ${binaryStr}</p>`;
+
+            outputElement.textContent = binaryStr;
+            explanationElement.innerHTML = explanation;
+        }
+
+        // Initialize with default conversions on load
+        window.onload = () => {
+            convertFromBinary();
+            convertFromDecimal();
+        };
+
+    </script>
+</body>
+</html>

@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ping (ICMP) Command Simulator</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Consolas', 'Courier New', monospace;
+            background: linear-gradient(180deg, #353636 50%, #032a36 75%);
+            min-height: 100vh;
+        }
+        a {
+            display: block;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            text-align: center;
+        }
+        .container-card {
+            background-color: white;
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+            padding: 2rem;
+            border-bottom: 5px solid;
+            transition: all 0.3s ease;
+        }
+        .terminal {
+            background-color: #0f172a; /* Slate 900 */
+            color: #10b981; /* Emerald 500 */
+            font-family: 'Consolas', 'Courier New', monospace;
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            min-height: 150px;
+        }
+        .log-container {
+            height: 300px;
+            overflow-y: auto;
+            background-color: #1e293b; /* Slate 800 */
+            color: #e2e8f0; /* Slate 200 */
+            font-family: 'Consolas', 'Courier New', monospace;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            font-size: 0.9rem;
+        }
+        .log-stage { color: #f97316; font-weight: bold; } /* Orange */
+        .log-request { color: #3b82f6; } /* Blue */
+        .log-reply { color: #22c55e; } /* Green */
+        .log-protocol { color: #a855f7; font-weight: bold; } /* Purple */
+        .log-info { color: #94a3b8; } /* Slate 400 */
+
+        .protocol-box {
+            background-color: #4d4e4e;
+            border: 1px solid #0ed31f;
+            padding: 0.5rem;
+            margin-top: 0.5rem;
+            border-radius: 0.5rem;
+            font-size: 0.85rem;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-10 min-h-screen">
+
+    <div class="max-w-7xl mx-auto">
+        <h1 class="text-4xl font-extrabold text-orange-500 mb-2 text-center">
+            Ping (ICMP) Protocol Simulation
+        </h1>
+        <p class="text-lg text-white mb-8 text-center">
+            Simulating the process of sending an ICMP Echo Request and receiving an Echo Reply.
+        </p>
+        <p class="text-sm text-yellow-500 mb-8 text-center">
+            Press F5 or Reload/Refresh Browser to Reset Simulation.
+        </p>
+        <a id="link" class="text-sm hover:text-lime-500 text-yellow-200 mb-8 text-center" href="index.html">
+            Back to Simulations Index
+        </a>
+
+        <!-- Configuration and Terminal Display -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            <div class="container-card border-indigo-600">
+                <h3 class="text-2xl font-bold text-indigo-800 mb-4">Host Configuration</h3>
+                <div class="p-4 device-info bg-indigo-50 rounded-lg text-indigo-800 font-semibold mb-4">
+                    <p><strong>Source IP (Client):</strong> 192.168.1.10</p>
+                    <p><strong>Target IP (Server):</strong> 192.168.1.200</p>
+                </div>
+                
+                <h3 class="text-2xl font-bold text-indigo-800 mb-4">Terminal Output</h3>
+                <div id="terminal-output" class="terminal">
+                    $ <span class="text-white">ping 192.168.1.200</span>
+                    <p class="mt-2 text-gray-400">Pinging 192.168.1.200 with 32 bytes of data...</p>
+                </div>
+
+                <button id="start-btn" onclick="startPingProcess()" class="mt-6 w-full bg-lime-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-150">
+                    Execute Ping
+                </button>
+                <button id="reset-btn" onclick="resetSimulation()" class="mt-4 w-full bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-6 rounded-lg shadow-md transition duration-150 hidden">
+                    Reset Simulation
+                </button>
+            </div>
+
+            <!-- Simulation Log -->
+            <div class="container-card border-gray-700">
+                <h3 class="text-2xl font-bold text-gray-800 mb-4">Step-by-Step Protocol Log</h3>
+                <div id="log" class="log-container">
+                    <p class="log-info">System: The simulation is ready. Click 'Execute Ping' to trace the ICMP packet.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Configuration Constants ---
+        const SOURCE_IP = '192.168.1.10';
+        const TARGET_IP = '192.168.1.200';
+
+        // --- State Variables ---
+        let isRunning = false;
+
+        // --- DOM References ---
+        const log = document.getElementById('log');
+        const terminalOutput = document.getElementById('terminal-output');
+        const startBtn = document.getElementById('start-btn');
+        const resetBtn = document.getElementById('reset-btn');
+
+        // --- Utility Functions ---
+
+        /** Logs a message to the simulation console with appropriate styling. */
+        function logMessage(text, className = 'log-info') {
+            const entry = document.createElement('p');
+            entry.className = className + ' mb-1';
+            entry.textContent = text;
+            log.appendChild(entry);
+            log.scrollTop = log.scrollHeight;
+        }
+
+        /** Logs a detailed protocol encapsulation view. */
+        function logEncapsulation(layerName, details, className = 'log-protocol') {
+            const entry = document.createElement('div');
+            entry.innerHTML = `<p class="${className}">${layerName} Layer:</p><div class="protocol-box">${details}</div>`;
+            log.appendChild(entry);
+            log.scrollTop = log.scrollHeight;
+        }
+
+        /** Delays execution to simulate time passage. */
+        const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+        
+        /** Simulates the RTT (Round Trip Time). */
+        function simulateLatency() {
+            return Math.floor(Math.random() * 50) + 20; // 20ms to 70ms
+        }
+
+        // --- Core Simulation Logic ---
+
+        async function startPingProcess() {
+            if (isRunning) return;
+            isRunning = true;
+            startBtn.disabled = true;
+            terminalOutput.innerHTML = '$ <span class="text-white">ping 192.168.1.200</span>';
+            log.innerHTML = '';
+
+            logMessage(`\n--- STEP 1: PING COMMAND EXECUTION ---`, 'text-lg log-stage');
+            await delay(1000);
+            logMessage(`(1.1) The user executes 'ping ${TARGET_IP}' on the client machine (${SOURCE_IP}).`);
+            logMessage(`(1.2) The Operating System recognizes this as an ICMP utility request.`, 'log-protocol');
+            
+            logMessage(`\n--- STEP 2: ICMP ECHO REQUEST CREATION ---`, 'text-lg log-stage');
+            await delay(1500);
+            
+            // ICMP Layer
+            logEncapsulation("ICMP (Layer 4/3)", 
+                `Type: 8 (Echo Request)<br>
+                 Code: 0<br>
+                 Checksum: [Calculated]<br>
+                 Data: 32 bytes (often a sequence number and timestamp)`, 
+                'log-protocol');
+            
+            // IP Layer Encapsulation
+            await delay(1000);
+            logEncapsulation("IP (Layer 3)", 
+                `Source IP: ${SOURCE_IP}<br>
+                 Destination IP: ${TARGET_IP}<br>
+                 Protocol: 1 (ICMP)`, 
+                'log-protocol');
+            
+            logMessage(`(2.3) The ICMP/IP packet is ready. The OS checks the routing table to determine if ${TARGET_IP} is local or remote. (Assuming local for simplicity).`, 'log-info');
+
+            // 3. ARP resolution (skipped if MAC is cached)
+            await delay(1500);
+            logMessage(`(2.4) **ARP CHECK**: OS determines the Target MAC is needed for the local network. (Assume successful ARP lookup).`, 'log-info');
+            
+            // Ethernet Layer Encapsulation
+            await delay(1000);
+            logEncapsulation("Ethernet (Layer 2)", 
+                `Source MAC: [Client's MAC]<br>
+                 Destination MAC: [Target's MAC]<br>
+                 EtherType: 0x0800 (IPv4)`, 
+                'log-protocol');
+            logMessage(`(2.5) The completed Frame (ICMP/IP/Ethernet) is sent out onto the wire.`, 'log-request font-bold');
+            
+            logMessage(`\n--- STEP 3: TRAVEL AND TARGET PROCESSING ---`, 'text-lg log-stage');
+            await delay(2000);
+            logMessage(`(3.1) The Frame arrives at the Target Server (${TARGET_IP}).`);
+            logMessage(`(3.2) Target Server decapsulates the Frame, verifies the IP and finds Protocol 1 (ICMP).`);
+            
+            await delay(1500);
+            logMessage(`(3.3) The ICMP kernel module processes the request: Type 8 (Echo Request).`, 'log-info');
+            logMessage(`(3.4) **ACTION**: The server's OS is instructed to generate an ICMP Echo Reply.`, 'log-reply font-bold');
+
+            logMessage(`\n--- STEP 4: ICMP ECHO REPLY CREATION ---`, 'text-lg log-stage');
+            await delay(1500);
+
+            // ICMP Reply Layer
+            logEncapsulation("ICMP (Layer 4/3)", 
+                `Type: 0 (Echo Reply)<br>
+                 Code: 0<br>
+                 Checksum: [Recalculated]<br>
+                 Data: Original 32 bytes payload is copied back.`, 
+                'log-protocol');
+            
+            // IP Reply Layer
+            await delay(1000);
+            logEncapsulation("IP (Layer 3)", 
+                `Source IP: ${TARGET_IP} (SWAPPED)<br>
+                 Destination IP: ${SOURCE_IP} (SWAPPED)<br>
+                 Protocol: 1 (ICMP)`, 
+                'log-protocol');
+
+            logMessage(`(4.3) The Reply packet is encapsulated and sent back to the Client.`, 'log-reply font-bold');
+
+            logMessage(`\n--- STEP 5: CLIENT RECEIVES AND DISPLAYS ---`, 'text-lg log-stage');
+            const latency = simulateLatency();
+            await delay(1000 + latency);
+
+            logMessage(`(5.1) Client receives the ICMP Echo Reply.`, 'log-success');
+            logMessage(`(5.2) OS calculates Round Trip Time (RTT).`, 'log-info');
+
+            const terminalResult = `<p class="text-white">Reply from ${TARGET_IP}: bytes=32 time=${latency}ms TTL=64</p>`;
+            terminalOutput.innerHTML += terminalResult;
+            logMessage(`(5.3) Result displayed to the user on the console.`, 'log-success font-bold');
+
+            isRunning = false;
+            startBtn.classList.add('hidden');
+            resetBtn.classList.remove('hidden');
+            startBtn.disabled = false;
+        }
+
+        function resetSimulation() {
+            if (isRunning) return;
+            log.innerHTML = '<p class="log-info">System: The simulation is ready. Click \'Execute Ping\' to trace the ICMP packet.</p>';
+            terminalOutput.innerHTML = '$ <span class="text-white">ping 192.168.1.200</span><p class="mt-2 text-gray-400">Pinging 192.168.1.200 with 32 bytes of data...</p>';
+            
+            startBtn.classList.remove('hidden');
+            resetBtn.classList.add('hidden');
+            startBtn.disabled = false;
+        }
+
+        // Initialize on load
+        window.onload = function() {
+            resetSimulation();
+        };
+
+    </script>
+</body>
+</html>

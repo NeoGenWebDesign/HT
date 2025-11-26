@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OSPF Link-State Simulator</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Consolas', 'Courier New', monospace;
+            background: linear-gradient(180deg, #353636 50%, #032a36 75%);
+            min-height: 100vh;
+        }
+        a {
+            display: block;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            text-align: center;
+        }
+        .card {
+            background-color: rgb(240, 240, 240);
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+            padding: 2rem;
+            height: 100%;
+        }
+        .console-output {
+            background-color: #1f2937; /* Dark console background */
+            color: #19ec11; /* Light text */
+            font-family: 'Consolas', 'Courier New', monospace;
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            min-height: 400px;
+            max-height: 500px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            line-height: 1.5;
+            font-size: 0.9rem;
+        }
+        /* Console log coloring for clarity */
+        .log-lsa { color: #f6ad55; font-weight: bold; } /* Orange/Amber for LSA */
+        .log-spf { color: #63b3ed; } /* Blue for SPF step */
+        .log-success { color: #48bb78; } /* Green for final route */
+        .log-fail { color: #f56565; } /* Red for failure */
+        .log-info { color: #a0aec0; }
+        .log-router { color: #7c3aed; font-weight: bold; } /* Violet for Router Name */
+        .log-link { color: #f97316; } /* Orange for Link */
+
+        /* Network Diagram Styling */
+        #network-diagram {
+            position: relative;
+            height: 350px;
+            width: 100%;
+        }
+        .node {
+            position: absolute;
+            width: 70px;
+            height: 70px;
+            background-color: #aa0dda; /* Violet */
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            font-weight: bold;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border: #520244 3px solid; /* Blue border */
+        }
+        .link-line {
+            position: absolute;
+            background-color: #4a5568; /* Gray */
+            height: 3px;
+            transform-origin: 0 0;
+            transition: all 0.5s ease;
+        }
+        .link-metric {
+            position: absolute;
+            background-color: #fff;
+            padding: 2px 8px;
+            border-radius: 0.5rem;
+            font-weight: 500;
+            border: 1px solid #4a5568;
+            font-size: 0.8rem;
+            z-index: 5;
+        }
+        .link-line.broken {
+            background-color: #f56565; /* Red */
+            height: 5px;
+            opacity: 0.8;
+            border-style: dashed;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-10 min-h-screen">
+
+    <div class="max-w-7xl mx-auto">
+        <h1 class="text-4xl font-extrabold text-orange-500 mb-2 text-center">
+            OSPF (Link-State) Protocol Simulator
+        </h1>
+        <p class="text-lg text-white mb-8 text-center">
+            Demonstrating LSA flooding, LSDB synchronization, and the SPF (Dijkstra) calculation.
+        </p>
+        <p class="text-sm text-yellow-500 mb-8 text-center">
+            Press F5 or Reload/Refresh Browser to Reset Simulation.
+        </p>
+        <a id="link" class="text-sm hover:text-lime-500 text-yellow-200 mb-8 text-center" href="index.html">
+            Back to Simulations Index
+        </a>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+            
+            <!-- Explanation & Controls -->
+            <div class="lg:col-span-1">
+                <div class="card mb-6">
+                    <h3 class="text-2xl font-bold text-gray-800 mb-4">OSPF Concepts</h3>
+                    <p class="text-gray-700 mb-4 text-sm">
+                        OSPF uses Cost as its metric, typically calculated as `10^8 / Bandwidth (bps)`. Lower cost is better.
+                    </p>
+                    <ul class="list-disc list-inside text-sm text-gray-600 space-y-2 mb-4">
+                        <li>**LSA:** Link State Advertisement. Describes a router's adjacent links and their costs.</li>
+                        <li>**LSDB:** Link State Database. An identical map of the entire network, built from all received LSAs.</li>
+                        <li>**SPF:** Shortest Path First algorithm (Dijkstra). Runs against the LSDB to find the best tree of paths.</li>
+                    </ul>
+                    <hr class="my-4">
+                    <h3 class="text-xl font-bold text-gray-800 mb-4">Simulation Controls</h3>
+                    
+                    <button id="start-btn" onclick="startSimulation()" 
+                            class="w-full bg-orange-300 hover:bg-orange-500 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-150 mb-4">
+                        1. Start Initial Convergence
+                    </button>
+
+                    <button id="break-btn" onclick="breakLink()" disabled
+                            class="w-full bg-red-400 hover:bg-red-600 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-150 mb-2 opacity-70 cursor-not-allowed">
+                        2. Simulate Link Failure (R1 &harr; R2)
+                    </button>
+                </div>
+            </div>
+
+            <!-- Simulation and Table -->
+            <div class="lg:col-span-2 grid grid-rows-2 gap-8">
+                <!-- Network Diagram -->
+                <div class="card relative overflow-hidden">
+                    <h3 class="text-2xl font-bold text-gray-800 mb-4">Topology & Costs (Ref. Bandwidth)</h3>
+                    <div id="network-diagram">
+                        <!-- Nodes and links are drawn here by JS -->
+                    </div>
+                </div>
+
+                <!-- Console Output -->
+                <div class="card p-1">
+                    <h3 class="text-2xl font-bold text-gray-800 px-8 pt-6">OSPF Convergence Log (R1's Perspective)</h3>
+                    <div id="console" class="console-output">
+                        Simulator ready. Press "Start Initial Convergence" to begin.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Routing Table Display (Focus on Router R1's perspective) -->
+        <div class="card mt-8">
+            <h3 class="text-2xl font-bold text-gray-800 mb-4">Router R1's Routing Table (Current SPF Result)</h3>
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Destination Router</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Cost</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Next Hop</th>
+                    </tr>
+                </thead>
+                <tbody id="routing-table-body" class="bg-white divide-y divide-gray-200">
+                    <!-- Table rows injected here -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // --- Global State and Constants ---
+        const consoleOutput = document.getElementById('console');
+        const diagramContainer = document.getElementById('network-diagram');
+        const tableBody = document.getElementById('routing-table-body');
+        const refBandwidth = 100000000; // 100 Mbps (Reference Bandwidth for Cost calculation)
+        const nodes = ['R1', 'R2', 'R3', 'R4'];
+        const INF = 9999999;
+        
+        let linkStateDatabase = {}; // LSDB: { Router: { neighbor: cost, ... } }
+        
+        const NODE_POSITIONS = {
+            R1: { x: 50, y: 100 },
+            R2: { x: 450, y: 100 },
+            R3: { x: 250, y: 50 },
+            R4: { x: 250, y: 250 }
+        };
+
+        // Topology defined by link Bandwidth (in bps)
+        let topology = {
+            'R1-R3': { nodes: ['R1', 'R3'], bandwidth: 100000000, cost: 0, broken: false }, // 100 Mbps -> Cost 1
+            'R1-R4': { nodes: ['R1', 'R4'], bandwidth: 10000000, cost: 0, broken: false },  // 10 Mbps -> Cost 10
+            'R3-R2': { nodes: ['R3', 'R2'], bandwidth: 10000000, cost: 0, broken: false },  // 10 Mbps -> Cost 10
+            'R4-R2': { nodes: ['R4', 'R2'], bandwidth: 1000000, cost: 0, broken: false },   // 1 Mbps -> Cost 100
+        };
+
+        /** Utility: Logs messages to the console with styling */
+        function log(message, type = 'log-info') {
+            consoleOutput.innerHTML += `<span class="${type}">${message}</span>\n`;
+            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+        }
+
+        /** OSPF Cost Calculation: Cost = Reference Bandwidth / Interface Bandwidth */
+        function calculateCost(bandwidth) {
+            if (bandwidth === 0) return INF; // Broken link
+            const cost = Math.round(refBandwidth / bandwidth);
+            return Math.max(1, cost); // Cost must be at least 1
+        }
+
+        /** Utility: Draws a link line and metric label */
+        function drawLink(id, n1, n2, cost, bandwidth) {
+            const nodeA = NODE_POSITIONS[n1];
+            const nodeB = NODE_POSITIONS[n2];
+            const x1 = nodeA.x, y1 = nodeA.y;
+            const x2 = nodeB.x, y2 = nodeB.y;
+
+            const dx = x2 - x1;
+            const dy = y2 - y1;
+            const length = Math.sqrt(dx * dx + dy * dy);
+            const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+            
+            const isBroken = topology[id].broken;
+
+            const link = document.createElement('div');
+            link.id = `link-${id}`;
+            link.className = `link-line bg-gray-500 ${isBroken ? 'broken' : ''}`;
+            link.style.width = `${length}px`;
+            link.style.left = `${x1 + 35}px`; // Center offset
+            link.style.top = `${y1 + 35}px`; // Center offset
+            link.style.transform = `rotate(${angle}deg)`;
+            diagramContainer.appendChild(link);
+
+            const costLabel = document.createElement('div');
+            costLabel.className = 'link-metric';
+            
+            const costText = isBroken ? 'FAILED' : `Cost: ${cost}`;
+            const bwText = isBroken ? '' : `BW: ${bandwidth / 1000000}Mbps`;
+            
+            costLabel.innerHTML = `${costText}<br>${bwText}`;
+            costLabel.style.left = `${x1 + dx / 2 + 10}px`;
+            costLabel.style.top = `${y1 + dy / 2 - 10}px`;
+            diagramContainer.appendChild(costLabel);
+        }
+
+        /** Renders the network diagram */
+        function renderNetwork() {
+            diagramContainer.innerHTML = '';
+
+            // 1. Draw Links and calculate costs
+            for (const id in topology) {
+                const { nodes: [n1, n2], bandwidth, broken } = topology[id];
+                const cost = broken ? INF : calculateCost(bandwidth);
+                topology[id].cost = cost; // Update cost in topology state
+                drawLink(id, n1, n2, cost, bandwidth);
+            }
+
+            // 2. Draw Nodes
+            for (const name in NODE_POSITIONS) {
+                const { x, y } = NODE_POSITIONS[name];
+                const node = document.createElement('div');
+                node.className = 'node';
+                node.style.left = `${x}px`;
+                node.style.top = `${y}px`;
+                node.textContent = name;
+                diagramContainer.appendChild(node);
+            }
+        }
+        
+        /** Step 1: Routers generate LSAs describing their direct links */
+        function generateLSAs() {
+            log('\n\n================================================================', 'log-lsa');
+            log('STEP 1: LSA Generation & Flooding (Synchronizing LSDBs)', 'log-lsa');
+            log('================================================================', 'log-lsa');
+            
+            // Clear existing LSDB
+            linkStateDatabase = {};
+
+            nodes.forEach(router => {
+                let lsa = {};
+                
+                // Find all direct neighbors and their costs
+                for (const id in topology) {
+                    const { nodes: [n1, n2], cost } = topology[id];
+                    if (n1 === router) {
+                        lsa[n2] = cost;
+                    } else if (n2 === router) {
+                        lsa[n1] = cost;
+                    }
+                }
+                
+                linkStateDatabase[router] = lsa;
+                log(`LSA from <span class="log-router">${router}</span>: Adjacencies: ${Object.entries(lsa).map(([n, c]) => `${n} (Cost ${c})`).join(', ')}`, 'log-lsa');
+            });
+
+            log('\nLSDB is now identical on all routers. Proceeding to SPF calculation.', 'log-lsa');
+        }
+
+        /** Step 2: Router R1 runs Dijkstra's Algorithm (SPF) against the LSDB */
+        function runDijkstra(source) {
+            log('\n\n================================================================', 'log-spf');
+            log(`STEP 2: <span class="log-router">${source}</span> Running SPF (Dijkstra's Algorithm) on LSDB`, 'log-spf');
+            log('================================================================', 'log-spf');
+
+            let distances = {};
+            let previous = {};
+            let unvisited = new Set(nodes);
+            
+            nodes.forEach(node => {
+                distances[node] = (node === source) ? 0 : INF;
+                previous[node] = null;
+            });
+            
+            let iteration = 0;
+            
+            while (unvisited.size > 0) {
+                iteration++;
+                
+                // Find the unvisited node with the smallest distance (current router)
+                let current = null;
+                let minDistance = INF;
+                
+                for (const node of unvisited) {
+                    if (distances[node] < minDistance) {
+                        minDistance = distances[node];
+                        current = node;
+                    }
+                }
+
+                if (current === null || distances[current] === INF) break; // All remaining nodes unreachable
+
+                unvisited.delete(current);
+                
+                log(`\n-- Iteration ${iteration}: Examining <span class="log-router">${current}</span> (Current Cost: ${distances[current]}) --`, 'log-spf');
+                
+                // Examine neighbors of the current router
+                const neighbors = linkStateDatabase[current] || {};
+                
+                for (const neighbor in neighbors) {
+                    const linkCost = neighbors[neighbor];
+                    
+                    // Skip if the link is considered broken (Cost INF)
+                    if (linkCost >= INF) continue; 
+
+                    const newDistance = distances[current] + linkCost;
+                    
+                    log(`  Checking Neighbor <span class="log-router">${neighbor}</span> via <span class="log-link">${current}</span> (Link Cost: ${linkCost})`, 'log-info');
+
+                    // If a shorter path is found
+                    if (newDistance < distances[neighbor]) {
+                        
+                        log(`    <span class="log-success">UPDATE: New Cost to ${neighbor} is ${newDistance} (was ${distances[neighbor]})</span>`, 'log-success');
+                        distances[neighbor] = newDistance;
+                        previous[neighbor] = current;
+                    } else {
+                        log(`    Current path is better or equal. Skip.`, 'log-info');
+                    }
+                }
+            }
+
+            // Build the final routing table structure
+            let routingTable = {};
+            nodes.forEach(dest => {
+                if (dest === source) return;
+                
+                let nextHop = dest;
+                let path = dest;
+
+                // Trace back to find the next hop (the first neighbor after the source)
+                let temp = dest;
+                while (previous[temp] !== source && previous[temp] !== null) {
+                    temp = previous[temp];
+                    path = `${temp} -> ${path}`;
+                }
+                
+                nextHop = (previous[dest] === source) ? dest : temp;
+                path = `${source} -> ${path}`;
+
+                routingTable[dest] = {
+                    cost: distances[dest],
+                    nextHop: nextHop,
+                    fullPath: path
+                };
+            });
+            
+            return routingTable;
+        }
+
+        /** Renders the routing table for R1 */
+        function renderRoutingTable(table) {
+            tableBody.innerHTML = '';
+
+            for (const dest in table) {
+                const { cost, nextHop, fullPath } = table[dest];
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-indigo-50 transition duration-150';
+                
+                const costDisplay = cost >= INF ? `<span class="text-red-600 font-bold">Unreachable</span>` : cost;
+                
+                row.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${dest}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-mono">${costDisplay}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700 font-mono">${nextHop || 'N/A'}</td>
+                `;
+                tableBody.appendChild(row);
+            }
+        }
+
+        /** Main simulation initializer */
+        function startSimulation() {
+            // Reset controls
+            document.getElementById('start-btn').textContent = "Convergence Complete";
+            document.getElementById('start-btn').disabled = true;
+            document.getElementById('start-btn').classList.remove('bg-indigo-600', 'hover:bg-indigo-700');
+            document.getElementById('start-btn').classList.add('bg-gray-400', 'cursor-not-allowed');
+
+            document.getElementById('break-btn').disabled = false;
+            document.getElementById('break-btn').classList.remove('opacity-50', 'cursor-not-allowed', 'bg-gray-400');
+            document.getElementById('break-btn').classList.add('bg-red-500', 'hover:bg-red-600');
+            document.getElementById('break-btn').textContent = "2. Simulate Link Failure (R1 ↔ R2)";
+
+            // 1. Initial render and cost calculation
+            renderNetwork();
+            
+            // 2. LSA Flooding and LSDB formation
+            generateLSAs();
+            
+            // 3. SPF calculation for R1
+            const r1Routes = runDijkstra('R1');
+            
+            // 4. Render final routing table
+            renderRoutingTable(r1Routes);
+            log('\n\n--- OSPF INITIAL CONVERGENCE COMPLETE ---', 'log-success');
+        }
+
+        /** Simulates the breaking of the R1-R2 link */
+        function breakLink() {
+            
+            // 1. Update the link state in the graph (R1-R2 link is the one that fails)
+            const linkId = 'R1-R3'; // Let's use R1-R3 to force a path change through R4
+            topology[linkId].broken = true;
+            topology[linkId].cost = INF;
+            
+            // 2. Immediate update of diagram and console
+            renderNetwork();
+            log(`\n\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!`, 'log-fail');
+            log(`!!! SIMULATION EVENT: Link <span class="log-link">${linkId}</span> has failed (Cost set to INF) !!!`, 'log-fail');
+            log('!!! R1 sends an LSA update and recalculates SPF immediately. !!!', 'log-fail');
+            log('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!', 'log-fail');
+
+            // 3. OSPF Re-convergence: New LSA Flooding and LSDB update
+            generateLSAs(); // LSDB updates with the link failure
+            
+            // 4. New SPF calculation for R1
+            const r1Routes = runDijkstra('R1');
+            
+            // 5. Render new routing table
+            renderRoutingTable(r1Routes);
+            
+            log('\n\n--- OSPF RE-CONVERGENCE COMPLETE ---', 'log-success');
+            log('Router R1 immediately uses the new best path (via R4) based on its new LSDB.', 'log-info');
+
+            document.getElementById('break-btn').disabled = true;
+            document.getElementById('break-btn').textContent = "Link Failed: Re-Converged";
+            document.getElementById('break-btn').classList.remove('bg-red-500', 'hover:bg-red-600');
+            document.getElementById('break-btn').classList.add('bg-gray-400', 'cursor-not-allowed');
+        }
+
+        // Initialize on load
+        document.addEventListener('DOMContentLoaded', () => {
+            renderNetwork();
+        });
+
+    </script>
+</body>
+</html>

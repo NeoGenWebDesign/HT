@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TCP Three-Way Handshake Simulator</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Consolas', 'Courier New', monospace;
+            background: linear-gradient(180deg, #353636 50%, #032a36 75%);
+            min-height: 100vh;
+        }
+        a {
+            display: block;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            text-align: center;
+        }
+        .card {
+            background-color: white;
+            border-radius: 1rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.06);
+            padding: 1.5rem;
+            border-top: 5px solid;
+        }
+        .log-container {
+            height: 350px;
+            overflow-y: auto;
+            background-color: #111827; /* Dark background */
+            color: #ecf0f1; /* Light text */
+            font-family: 'Consolas', 'Courier New', monospace;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            font-size: 0.9rem;
+        }
+        .client-packet { color: #3498db; } /* Blue for Client traffic */
+        .server-packet { color: #2ecc71; } /* Green for Server traffic */
+        .system-message { color: #f1c40f; } /* Yellow for system info */
+        .highlight { font-weight: bold; color: #e74c3c; } /* Red for key numbers */
+        .established { color: #10b981; }
+    </style>
+</head>
+<body class="p-4 md:p-10 min-h-screen">
+
+    <div class="max-w-6xl mx-auto">
+        <h1 class="text-4xl font-extrabold text-orange-400 mb-2 text-center">
+            TCP Three-Way Handshake (SYN, SYN-ACK, ACK)
+        </h1>
+        <p class="text-lg text-gray-100 mb-8 text-center">
+            The foundation of a reliable TCP connection. Click "Start Handshake" to visualize the process and track the sequence numbers.
+        </p>
+        <p class="text-sm text-yellow-500 mb-8 text-center">
+            Press F5 or Reload/Refresh Browser to Reset Simulation.
+        </p>
+        <a id="link" class="text-sm hover:text-lime-500 text-yellow-200 mb-8 text-center" href="index.html">
+            Back to Simulations Index
+        </a>
+
+        <!-- Informational Section -->
+        <div class="card border-teal-600 mb-8">
+            <h2 class="text-2xl font-semibold text-teal-800 mb-3">The Principle of Reliability</h2>
+            
+            <p class="text-gray-700">
+                The three-way handshake is how TCP establishes a reliable connection. It synchronizes two key values: the **Initial Sequence Number (ISN)** from both the Client and the Server. The client and server agree on which numbers to start at, ensuring that all data packets that follow can be reliably tracked and acknowledged.
+            </p>
+            <ul class="list-disc list-inside mt-3 text-sm space-y-1 text-gray-700">
+                <li><strong>SYN:</strong> <span class="font-semibold text-blue-600">S</span>ynchronize Sequence Numbers.</li>
+                <li><strong>ACK:</strong> <span class="font-semibold text-green-600">Ack</span>nowledge received data.</li>
+            </ul>
+        </div>
+
+        <!-- Simulation Area -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            <!-- Connection Info Panel -->
+            <div id="info-card" class="card border-teal-600 lg:col-span-1 bg-gray-300">
+                <h3 class="text-2xl font-bold text-gray-800 mb-4">Connection State</h3>
+                <div class="space-y-4 text-sm">
+                    <div>
+                        <p class="font-semibold text-blue-700">Client (192.168.1.10)</p>
+                        <p class="text-gray-700">Initial Sequence No. (ISN): <span id="client-isn" class="font-mono highlight">N/A</span></p>
+                        <p class="text-gray-700">Next Expected Seq. No.: <span id="client-expected-seq" class="font-mono text-gray-600">N/A</span></p>
+                    </div>
+                    <div>
+                        <p class="font-semibold text-green-700">Server (203.0.113.5)</p>
+                        <p class="text-gray-700">Initial Sequence No. (ISN): <span id="server-isn" class="font-mono highlight">N/A</span></p>
+                        <p class="text-gray-700">Next Expected Seq. No.: <span id="server-expected-seq" class="font-mono text-gray-600">N/A</span></p>
+                    </div>
+                    <p class="text-lg font-bold text-gray-700">Status: <span id="connection-status" class="text-red-500">CLOSED</span></p>
+                </div>
+                
+                <button id="start-button" onclick="startHandshake()" class="w-full mt-6 bg-lime-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg shadow-md transition duration-150">
+                    Start Handshake
+                </button>
+                <button id="reset-button" onclick="resetSimulation()" class="w-full mt-2 bg-gray-400 hover:bg-gray-500 text-white font-bold py-2 rounded-lg transition duration-150" disabled>
+                    Reset
+                </button>
+            </div>
+
+            <!-- Network Log Panel -->
+            <div class="card border-lime-400 lg:col-span-2 bg-gradient-to-b from-gray-700 to-gray-200">
+                <h3 class="text-2xl font-bold text-orange-400 mb-4">Packet Exchange Log</h3>
+                <div id="log" class="log-container">
+                    <p class="system-message">System: Click 'Start Handshake' to begin the connection setup.</p>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        // --- Simulation State ---
+        let clientISN = 0;
+        let serverISN = 0;
+        let isProcessing = false;
+        
+        // --- DOM Elements ---
+        const log = document.getElementById('log');
+        const statusDisplay = document.getElementById('connection-status');
+        const startButton = document.getElementById('start-button');
+        const resetButton = document.getElementById('reset-button');
+        
+        // --- Utility Functions ---
+
+        /** Generates a large random number to simulate a real Initial Sequence Number (ISN) */
+        function generateISN() {
+            // Using a simpler large number for easier tracking
+            return Math.floor(Math.random() * 10000) + 1000;
+        }
+
+        /** Clears the log and resets the UI state. */
+        function resetSimulation() {
+            log.innerHTML = '<p class="system-message">System: Simulation reset. Click to start a new handshake.</p>';
+            statusDisplay.textContent = 'CLOSED';
+            statusDisplay.classList.remove('established');
+            startButton.disabled = false;
+            resetButton.disabled = true;
+
+            document.getElementById('client-isn').textContent = 'N/A';
+            document.getElementById('server-isn').textContent = 'N/A';
+            document.getElementById('client-expected-seq').textContent = 'N/A';
+            document.getElementById('server-expected-seq').textContent = 'N/A';
+            
+            clientISN = 0;
+            serverISN = 0;
+            isProcessing = false;
+        }
+
+        /** Logs a message to the simulation console with appropriate styling. */
+        function logMessage(sender, step, flags, seq, ack, description) {
+            const typeClass = sender === 'CLIENT' ? 'client-packet' : 'server-packet';
+            const logEntry = document.createElement('p');
+            logEntry.innerHTML = `
+                <span class="${typeClass}">[${sender}] - ${step} - Flags: ${flags}</span><br>
+                <span class="ml-4">Sequence No (Seq): <span class="highlight">${seq}</span></span>
+                <span class="ml-4">Acknowledgement No (Ack): <span class="highlight">${ack}</span></span><br>
+                <span class="ml-4 text-gray-500">// ${description}</span>
+            `;
+            log.appendChild(logEntry);
+            log.scrollTop = log.scrollHeight; // Auto-scroll to bottom
+        }
+
+        /** Updates the ISN and next expected sequence number displays. */
+        function updateConnectionInfo(clientNext, serverNext) {
+            if (clientISN > 0) document.getElementById('client-isn').textContent = clientISN;
+            if (serverISN > 0) document.getElementById('server-isn').textContent = serverISN;
+
+            document.getElementById('client-expected-seq').textContent = clientNext !== undefined ? clientNext : 'N/A';
+            document.getElementById('server-expected-seq').textContent = serverNext !== undefined ? serverNext : 'N/A';
+        }
+
+
+        // --- Handshake Steps ---
+
+        function startHandshake() {
+            if (isProcessing) return;
+
+            isProcessing = true;
+            startButton.disabled = true;
+            resetButton.disabled = false;
+            
+            // Generate Initial Sequence Numbers (ISNs)
+            clientISN = generateISN();
+            serverISN = generateISN();
+            updateConnectionInfo(clientISN, serverISN);
+
+            log.innerHTML = `<p class="system-message">System: Starting handshake. Client ISN: ${clientISN}, Server ISN: ${serverISN}.</p>`;
+            statusDisplay.textContent = 'SYN_SENT';
+
+            // Step 1: SYN
+            setTimeout(step1Syn, 1500);
+        }
+
+        // 1. Client sends SYN
+        function step1Syn() {
+            const seq = clientISN;
+            const ack = 0; // No acknowledgement number yet
+            
+            logMessage('CLIENT', 'STEP 1: SYN', '[SYN]', seq, ack, 'Client initiates connection, announcing its starting Sequence Number (ISN)');
+            
+            // Client now expects Seq = ISN + 1 from the server
+            updateConnectionInfo(clientISN + 1, serverISN);
+
+            setTimeout(step2SynAck, 1500);
+        }
+
+        // 2. Server sends SYN-ACK
+        function step2SynAck() {
+            const seq = serverISN;
+            const ack = clientISN + 1; // Acknowledges the client's SYN (Seq=clientISN, so Ack=clientISN+1)
+            
+            logMessage('SERVER', 'STEP 2: SYN-ACK', '[SYN, ACK]', seq, ack, 'Server agrees to connect, announcing its ISN and acknowledging the client');
+            statusDisplay.textContent = 'SYN_RECEIVED';
+
+            // Server now expects Seq = ISN + 1 from the client
+            updateConnectionInfo(clientISN + 1, serverISN + 1);
+
+            setTimeout(step3Ack, 1500);
+        }
+
+        // 3. Client sends ACK
+        function step3Ack() {
+            const seq = clientISN + 1; // Uses the sequence number expected by the server
+            const ack = serverISN + 1; // Acknowledges the server's SYN-ACK (Seq=serverISN, so Ack=serverISN+1)
+            
+            logMessage('CLIENT', 'STEP 3: ACK', '[ACK]', seq, ack, 'Client confirms receipt of the server\'s acknowledgment. Connection is now established.');
+
+            // Final state update
+            statusDisplay.textContent = 'ESTABLISHED';
+            statusDisplay.classList.add('established');
+            log.appendChild(document.createElement('hr'));
+            log.appendChild(document.createElement('p')).innerHTML = `<span class="system-message established font-bold">SUCCESS! Connection Established.</span> <span class="text-gray-400">Data transfer can begin.</span>`;
+            
+            isProcessing = false;
+            startButton.disabled = true;
+        }
+
+        // Initialize the simulation state on load
+        window.onload = resetSimulation;
+
+    </script>
+</body>
+</html>

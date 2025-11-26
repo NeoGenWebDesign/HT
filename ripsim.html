@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RIP Protocol Simulator</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Consolas', 'Courier New', monospace;
+            background: linear-gradient(180deg, #353636 50%, #032a36 75%);
+            min-height: 100vh;
+        }
+        a {
+            display: block;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            text-align: center;
+        }
+        .card {
+            background-color: white;
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+            padding: 1rem;
+            height: 100%;
+        }
+        .console-output {
+            background-color: #1f2937; /* Dark console background */
+            color: #3ae923; /* Light text */
+            font-family: 'Consolas', 'Courier New', monospace;
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            min-height: 400px;
+            max-height: 500px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            line-height: 1.5;
+            font-size: 0.9rem;
+        }
+        /* Console log coloring for clarity */
+        .log-step { color: #f6ad55; font-weight: bold; } /* Orange/Amber */
+        .log-exchange { color: #63b3ed; } /* Blue for packet exchange */
+        .log-update { color: #48bb78; } /* Green for successful update */
+        .log-fail { color: #f56565; } /* Red for error/link fail */
+        .log-info { color: #a0aec0; }
+        .log-router { color: #f6ad55; font-weight: bold; } 
+
+        /* Network Diagram Styling */
+        #network-diagram {
+            position: relative;
+            height: 350px;
+            width: 100%;
+        }
+        .node {
+            position: absolute;
+            width: 70px;
+            height: 70px;
+            background-color: #b408a6; /* Indigo */
+            color: white;
+            border-radius: 50%;
+            border: #6e28c9 4px solid;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            font-weight: bold;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s;
+        }
+        .link-line {
+            position: absolute;
+            background-color: #4a5568; /* Gray */
+            height: 3px;
+            transform-origin: 0 0;
+            transition: all 0.5s ease;
+        }
+        .link-cost {
+            position: absolute;
+            background-color: #fff;
+            padding: 2px 8px;
+            border-radius: 0.5rem;
+            font-weight: bold;
+            border: 1px solid #4a5568;
+        }
+        .link-line.broken {
+            background-color: #f56565; /* Red */
+            height: 5px;
+            opacity: 0.8;
+            border-style: dashed;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-10 min-h-screen">
+
+    <div class="max-w-7xl mx-auto">
+        <h1 class="text-4xl font-extrabold text-orange-500 mb-2 text-center">
+            RIP (Routing Information Protocol) Simulator
+        </h1>
+        <p class="text-lg text-white mb-8 text-center">
+            A Distance Vector protocol that uses Hop Count as its metric, where 16 is considered Infinity.
+        </p>
+        <p class="text-sm text-yellow-500 mb-8 text-center">
+            Press F5 or Reload/Refresh Browser to Reset Simulation.
+        </p>
+        <a id="link" class="text-sm hover:text-lime-500 text-yellow-200 mb-8 text-center" href="index.html">
+            Back to Simulations Index
+        </a>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+            
+            <!-- Explanation & Controls -->
+            <div class="lg:col-span-1">
+                <div class="card mb-6">
+                    <h3 class="text-2xl font-bold text-gray-800 mb-4">RIP Fundamentals</h3>
+                    <p class="text-gray-700 mb-4 text-lg">
+                        
+                        RIP uses Hop Count (number of routers to destination) as its metric. A cost of **16 is considered unreachable (infinity)**. Routers exchange their *full* routing table with all direct neighbors every 30 seconds.
+                    </p>
+                    <ul class="list-disc list-inside text-sm text-gray-600 space-y-2 mb-4">
+                        <li>**Metric:** Hop Count (1 hop per router).</li>
+                        <li>**Convergence:** Slow, relying on periodic updates.</li>
+                        <li>**Limit:** Maximum useful hop count is 15.</li>
+                    </ul>
+                    <hr class="my-4">
+                    <h3 class="text-xl font-bold text-gray-800 mb-4">Simulation Controls</h3>
+                    
+                    <button id="start-btn" onclick="startSimulation(1)" 
+                            class="w-full bg-lime-600 hover:bg-emerald-800 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-150 mb-4">
+                        1. Start Initial Convergence
+                    </button>
+
+                    <button id="break-btn" onclick="breakLink()" disabled
+                            class="w-full bg-rose-600 hover:bg-red-900 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-150 mb-2 opacity-70 cursor-not-allowed">
+                        2. Simulate Link Failure (A &harr; B)
+                    </button>
+                </div>
+            </div>
+
+            <!-- Simulation and Table -->
+            <div class="lg:col-span-2 grid grid-rows-2 gap-8">
+                <!-- Network Diagram -->
+                <div class="card relative overflow-hidden">
+                    <h3 class="text-2xl font-bold text-gray-800 mb-4">Topology (Hop Count)</h3>
+                    <div id="network-diagram">
+                        <!-- Nodes and links are drawn here by JS -->
+                    </div>
+                </div>
+
+                <!-- Console Output -->
+                <div class="card p-1">
+                    <h3 class="text-2xl font-bold text-gray-800 px-8 pt-6">RIP Update Log (30-second intervals)</h3>
+                    <div id="console" class="console-output">
+                        Simulator ready. Press "Start Initial Convergence" to begin.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Routing Table Display (Focus on Router D's perspective) -->
+        <div class="card mt-8">
+            <h3 class="text-2xl font-bold text-gray-800 mb-4">Router D's Routing Table (Current State)</h3>
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Destination (Network)</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Metric (Hop Count)</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Next Hop</th>
+                    </tr>
+                </thead>
+                <tbody id="routing-table-body" class="bg-white divide-y divide-gray-200">
+                    <!-- Table rows injected here -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // --- Global State and Constants ---
+        const consoleOutput = document.getElementById('console');
+        const diagramContainer = document.getElementById('network-diagram');
+        const tableBody = document.getElementById('routing-table-body');
+        const infinity = 16;
+        const nodes = ['A', 'B', 'C', 'D'];
+
+        const NODE_POSITIONS = {
+            A: { x: 50, y: 100 },
+            B: { x: 250, y: 100 },
+            C: { x: 450, y: 100 },
+            D: { x: 250, y: 250 }
+        };
+
+        let graph = {
+            'A-B': { nodes: ['A', 'B'], cost: 1, broken: false },
+            'B-C': { nodes: ['B', 'C'], cost: 1, broken: false },
+            'B-D': { nodes: ['B', 'D'], cost: 1, broken: false },
+            'C-D': { nodes: ['C', 'D'], cost: 1, broken: false },
+        };
+        
+        // Router state: { Destination: { cost, nextHop } }
+        let routerTables = {};
+        let intervalId = null;
+        let updateCount = 0;
+
+        /** Utility: Logs messages to the console with styling */
+        function log(message, type = 'log-info') {
+            consoleOutput.innerHTML += `<span class="${type}">${message}</span>\n`;
+            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+        }
+
+        /** Utility: Draws a line between two points */
+        function drawLink(id, n1, n2, cost) {
+            const nodeA = NODE_POSITIONS[n1];
+            const nodeB = NODE_POSITIONS[n2];
+            const x1 = nodeA.x, y1 = nodeA.y;
+            const x2 = nodeB.x, y2 = nodeB.y;
+
+            const dx = x2 - x1;
+            const dy = y2 - y1;
+            const length = Math.sqrt(dx * dx + dy * dy);
+            const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+
+            const link = document.createElement('div');
+            link.id = `link-${id}`;
+            link.className = `link-line bg-gray-500 ${graph[id].broken ? 'broken' : ''}`;
+            link.style.width = `${length}px`;
+            link.style.left = `${x1 + 35}px`; // Center offset
+            link.style.top = `${y1 + 35}px`; // Center offset
+            link.style.transform = `rotate(${angle}deg)`;
+            diagramContainer.appendChild(link);
+
+            const costLabel = document.createElement('div');
+            costLabel.className = 'link-cost';
+            costLabel.textContent = cost === infinity ? 'Broken (16)' : `Hops: ${cost}`;
+            costLabel.style.left = `${x1 + dx / 2 + 10}px`;
+            costLabel.style.top = `${y1 + dy / 2 + 10}px`;
+            diagramContainer.appendChild(costLabel);
+        }
+
+        /** Renders the network diagram */
+        function renderNetwork() {
+            diagramContainer.innerHTML = '';
+
+            // Draw Links
+            for (const id in graph) {
+                const { nodes: [n1, n2], cost } = graph[id];
+                drawLink(id, n1, n2, cost);
+            }
+
+            // Draw Nodes
+            for (const name in NODE_POSITIONS) {
+                const { x, y } = NODE_POSITIONS[name];
+                const node = document.createElement('div');
+                node.className = 'node';
+                node.style.left = `${x}px`;
+                node.style.top = `${y}px`;
+                node.textContent = name;
+                diagramContainer.appendChild(node);
+            }
+        }
+
+        /** Initializes the routing table for a given router */
+        function initializeTable(routerName) {
+            let table = {};
+            // Self route
+            table[routerName] = { cost: 0, nextHop: 'Self' };
+
+            // Direct neighbors (cost = 1)
+            for (const id in graph) {
+                const { nodes: [n1, n2], cost, broken } = graph[id];
+                if (n1 === routerName && !broken) {
+                    table[n2] = { cost: cost, nextHop: n2 };
+                } else if (n2 === routerName && !broken) {
+                    table[n1] = { cost: cost, nextHop: n1 };
+                }
+            }
+            
+            // All other destinations start at infinity
+            nodes.forEach(dest => {
+                if (!table[dest]) {
+                    table[dest] = { cost: infinity, nextHop: null };
+                }
+            });
+            
+            routerTables[routerName] = table;
+        }
+
+        /** Simulates one periodic update cycle for all routers (Bellman-Ford update) */
+        function runUpdateCycle() {
+            updateCount++;
+            log(`\n================================================================`, 'log-step');
+            log(`[${updateCount}] RIP Update Cycle: Routers exchange tables (Simulated 30 seconds)`, 'log-step');
+            log(`================================================================`, 'log-step');
+
+            let updatesOccurred = false;
+            let neighbors = {};
+
+            // 1. Identify neighbors for each router
+            nodes.forEach(router => {
+                neighbors[router] = [];
+                for (const id in graph) {
+                    const { nodes: [n1, n2], broken } = graph[id];
+                    if (!broken) {
+                        if (n1 === router) neighbors[router].push(n2);
+                        else if (n2 === router) neighbors[router].push(n1);
+                    }
+                }
+            });
+
+            let newTables = JSON.parse(JSON.stringify(routerTables)); // Deep copy for simultaneous update
+
+            // 2. Process exchanges and updates (Bellman-Ford)
+            nodes.forEach(router => {
+                log(`\nRouter <span class="log-router">${router}</span> Processing Incoming Updates:`, 'log-step');
+                let routerUpdated = false;
+
+                neighbors[router].forEach(neighbor => {
+                    const neighborTable = routerTables[neighbor];
+                    log(`  Received table from Neighbor <span class="log-router">${neighbor}</span>.`, 'log-exchange');
+
+                    for (const dest in neighborTable) {
+                        if (dest === router) continue; // Don't route back to self
+
+                        const receivedCost = neighborTable[dest].cost;
+                        const costViaNeighbor = (receivedCost === infinity) ? infinity : receivedCost + 1; // +1 hop count
+
+                        // Check if the route via this neighbor is better (smaller hop count)
+                        if (costViaNeighbor < newTables[router][dest].cost) {
+                            
+                            // Update the route
+                            newTables[router][dest] = { cost: costViaNeighbor, nextHop: neighbor };
+                            routerUpdated = true;
+                            updatesOccurred = true;
+                            log(`    <span class="log-update">UPDATE: Path to ${dest} is now ${costViaNeighbor} hops via ${neighbor} (was ${routerTables[router][dest].cost}).</span>`, 'log-update');
+                        } 
+                        // Handle "Count-to-Infinity" (simplified split horizon not implemented here)
+                        else if (routerTables[router][dest].nextHop === neighbor && costViaNeighbor > routerTables[router][dest].cost) {
+                            // If we were using this neighbor and they now report a worse path (e.g., due to link failure), we must update
+                            newTables[router][dest] = { cost: costViaNeighbor, nextHop: neighbor };
+                            routerUpdated = true;
+                            updatesOccurred = true;
+                            
+                            if(costViaNeighbor >= infinity) {
+                                log(`    <span class="log-fail">LINK FAILURE PROPAGATION: Path to ${dest} via ${neighbor} is now infinite (${infinity}).</span>`, 'log-fail');
+                            } else {
+                                log(`    <span class="log-fail">METRIC INCREASE: Path to ${dest} via ${neighbor} increased to ${costViaNeighbor}.</span>`, 'log-fail');
+                            }
+                        }
+                    }
+                });
+
+                if (!routerUpdated) {
+                    log(`  No better paths found. Router ${router} table is stable.`, 'log-info');
+                }
+            });
+
+            // 3. Apply changes globally
+            routerTables = newTables;
+            
+            // 4. Update display for Router D
+            renderRoutingTable('D');
+
+            return updatesOccurred;
+        }
+
+        /** Renders the routing table for a specific router */
+        function renderRoutingTable(routerName) {
+            tableBody.innerHTML = '';
+            const table = routerTables[routerName];
+
+            for (const dest in table) {
+                const { cost, nextHop } = table[dest];
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-indigo-50 transition duration-150';
+                
+                const metricDisplay = cost >= infinity ? `<span class="text-red-600 font-bold">${cost} (Unreachable)</span>` : cost;
+                
+                row.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${dest}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-mono">${metricDisplay}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700 font-mono">${nextHop || 'N/A'}</td>
+                `;
+                tableBody.appendChild(row);
+            }
+        }
+        
+        /** Simulates the breaking of the A-B link */
+        function breakLink() {
+            if (intervalId) {
+                clearInterval(intervalId);
+            }
+            
+            // 1. Update the link state in the graph
+            graph['A-B'].broken = true;
+            graph['A-B'].cost = infinity;
+            
+            // 2. Immediately update the diagram and console
+            renderNetwork();
+            log(`\n\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!`, 'log-fail');
+            log(`!!! SIMULATION EVENT: Link A <-> B has failed (Cost set to ${infinity}) !!!`, 'log-fail');
+            log(`!!! Watch the slow re-convergence process and potential loops now. !!!`, 'log-fail');
+            log(`!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!`, 'log-fail');
+
+            // 3. Router A and B realize the link is down and update their direct routes to 16
+            routerTables['A']['B'] = { cost: infinity, nextHop: null };
+            routerTables['B']['A'] = { cost: infinity, nextHop: null };
+            
+            log(`Router A and B instantly set their direct link to each other to ${infinity}.`, 'log-fail');
+            
+            // 4. Restart the update cycle to watch re-convergence
+            document.getElementById('break-btn').disabled = true;
+            document.getElementById('break-btn').classList.remove('bg-red-500', 'hover:bg-red-600');
+            document.getElementById('break-btn').classList.add('bg-gray-400', 'cursor-not-allowed');
+
+            intervalId = setInterval(() => {
+                const converged = !runUpdateCycle();
+                if (converged && updateCount > 5) { // Ensure at least 5 cycles run after failure
+                    clearInterval(intervalId);
+                    log(`\n\n--- NETWORK RE-CONVERGED AFTER FAILURE ---`, 'log-step');
+                    log(`Router D's new path to A is now via C (Cost: ${routerTables['D']['A'].cost}).`, 'log-info');
+                    document.getElementById('break-btn').textContent = "Link Failed: Fully Re-Converged";
+                }
+            }, 1000); // 1-second interval for fast simulation
+        }
+
+        /** Main simulation initializer */
+        function startSimulation() {
+            if (intervalId) {
+                clearInterval(intervalId);
+            }
+            consoleOutput.innerHTML = '';
+            updateCount = 0;
+            
+            // 1. Initialize all router tables
+            nodes.forEach(initializeTable);
+            
+            log('Initializing all router tables. Direct neighbors set to Hop 1.', 'log-step');
+            log('Destination Router for display is Router D. Initial Table:', 'log-info');
+            renderRoutingTable('D');
+            
+            // 2. Start the periodic update cycle
+            document.getElementById('start-btn').textContent = "Running Convergence...";
+            document.getElementById('start-btn').disabled = true;
+            document.getElementById('start-btn').classList.remove('bg-indigo-600', 'hover:bg-indigo-700');
+            document.getElementById('start-btn').classList.add('bg-gray-400', 'cursor-not-allowed');
+            
+            intervalId = setInterval(() => {
+                const updatesOccurred = runUpdateCycle();
+                if (!updatesOccurred && updateCount > 1) {
+                    clearInterval(intervalId);
+                    log(`\n\n--- NETWORK CONVERGED ---`, 'log-step');
+                    log(`All routers agree on the shortest path (Update took ${updateCount} cycles).`, 'log-info');
+                    
+                    document.getElementById('break-btn').disabled = false;
+                    document.getElementById('break-btn').classList.remove('opacity-50', 'cursor-not-allowed', 'bg-gray-400');
+                    document.getElementById('break-btn').classList.add('bg-red-500', 'hover:bg-red-600');
+                    document.getElementById('start-btn').textContent = "Convergence Complete";
+                }
+            }, 1000); // 1-second interval for fast simulation
+        }
+
+        // Initialize on load
+        document.addEventListener('DOMContentLoaded', () => {
+            renderNetwork();
+        });
+
+    </script>
+</body>
+</html>

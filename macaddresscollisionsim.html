@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Collision Domain Simulator</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Consolas', 'Courier New', monospace;
+            background: linear-gradient(180deg, #353636 50%, #032a36 75%);
+            min-height: 100vh;
+        }
+        a {
+            display: block;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            text-align: center;
+        }
+        .card {
+            background-color: rgb(236, 234, 234);
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+            padding: 1rem;
+            width: 105%;
+        }
+        .console-output {
+            background-color: #3e3f41; /* Dark console background */
+            color: #29fc4c; /* Light text */
+            font-family: 'Consolas', 'Courier New', monospace;
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            min-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            line-height: 1.5;
+            font-size: 0.9rem;
+        }
+        /* Console log coloring for clarity */
+        .log-device { color: #e9c03b; } /* Blue */
+        .log-collision { color: #f56565; font-weight: bold; } /* Red */
+        .log-success { color: #48bb78; font-weight: bold; } /* Green */
+        .log-info { color: #a0aec0; }
+        .log-step { font-weight: bold; margin-top: 0.5rem; padding-top: 0.25rem; border-top: 1px dashed #374151; }
+
+        /* Device visual styling */
+        .device-icon {
+            transition: all 0.3s ease;
+            cursor: pointer;
+            height: auto;
+            width: auto;
+            color: #d318b4;
+            background: linear-gradient(180deg, #bbdbee, #d2dfe2);
+        }
+        .device-transmitting {
+            border: 4px solid #f6ad55; /* Orange border for transmitting */
+            box-shadow: 0 0 10px #f6ad55;
+            animation: pulse-orange 1s infinite alternate;
+        }
+        .device-colliding {
+            border: 4px solid #f56565; /* Red border for collision */
+            box-shadow: 0 0 15px #f56565;
+            animation: shake 0.5s;
+        }
+        @keyframes pulse-orange {
+            from { opacity: 0.6; }
+            to { opacity: 1; }
+        }
+        @keyframes shake {
+            0% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            50% { transform: translateX(5px); }
+            75% { transform: translateX(-5px); }
+            100% { transform: translateX(0); }
+        }
+    </style>
+</head>
+<body class="p-4 md:p-10 min-h-screen">
+
+    <div class="max-w-7xl mx-auto">
+        <h1 class="text-4xl font-extrabold text-orange-500 mb-2 text-center">
+            MAC Collision Domain Simulation
+        </h1>
+        <p class="text-lg text-white mb-8 text-center">
+            Simulating Ethernet's CSMA/CD on a single network segment (like a Hub).
+        </p>
+        <p class="text-sm text-yellow-500 mb-8 text-center">
+            Press F5 or Reload/Refresh Browser to Reset Simulation.
+        </p>
+        <a id="link" class="text-sm hover:text-lime-500 text-yellow-200 mb-8 text-center" href="index.html">
+            Back to Simulations Index
+        </a>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+            
+            <!-- Explanation Panel -->
+            <div class="lg:col-span-1">
+                <div class="card mb-6">
+                    <h3 class="text-2xl font-bold text-gray-800 mb-4">What is a Collision Domain?</h3>
+                    <p class="text-gray-700 mb-4">
+                        A collision domain is a network segment where data packets can collide with one another. This usually occurs when devices share the same medium (like an old Ethernet hub or a single cable segment).
+                        
+                    </p>
+                    <ul class="list-disc list-inside text-sm text-gray-600 space-y-2">
+                        <li>**MAC Address:** Used to identify devices uniquely within this domain.</li>
+                        <li>**CSMA/CD:** The protocol used in Ethernet to manage access to the shared medium. Devices must listen ("Carrier Sense") before transmitting.</li>
+                        <li>**The Rule:** Only one device can successfully transmit at any given time. If two devices transmit simultaneously, a collision occurs.</li>
+                        <li>**Resolution:** Devices detect the collision, stop transmitting, send a jamming signal, and wait a random amount of time ("Backoff") before trying again.</li>
+                    </ul>
+                </div>
+                
+                <div class="card">
+                    <h3 class="text-2xl font-bold text-gray-800 mb-4">Controls</h3>
+                    <div class="mb-4">
+                        <label for="numDevices" class="block text-sm font-medium text-gray-700 mb-2">Number of Devices (2-6)</label>
+                        <input type="number" id="numDevices" value="4" min="2" max="6" onchange="initializeNetwork()"
+                               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 font-mono text-base">
+                    </div>
+                    
+                    <button id="transmit-btn" onclick="startTransmissionCycle()" 
+                            class="w-full bg-cyan-600 hover:bg-cyan-800 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-150 mb-2">
+                        Start Simultaneous Transmission Cycle
+                    </button>
+                    <button onclick="initializeNetwork()" 
+                            class="w-full bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg shadow-md transition duration-150 text-sm">
+                        Reset Network
+                    </button>
+                </div>
+            </div>
+
+            <!-- Simulation Area -->
+            <div class="lg:col-span-2">
+                <div class="card mb-6">
+                    <h3 class="text-2xl font-bold text-gray-800 mb-4">Network Segment Diagram</h3>
+                    <div id="network-diagram" class="flex justify-around items-center h-40 relative border-b-4 border-gray-400">
+                        <!-- Devices will be injected here -->
+                    </div>
+                </div>
+
+                <!-- Console Output -->
+                <div class="card p-1">
+                    <h3 class="text-2xl font-bold text-gray-800 px-8 pt-6">CSMA/CD Console Log</h3>
+                    <div id="console" class="console-output">
+                        Network Ready. Please set the number of devices and press "Start Simultaneous Transmission Cycle".
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Global State ---
+        let devices = [];
+        let isSimulating = false;
+        const TRANSMISSION_WINDOW = 50; // ms: Time window to check for simultaneous attempts (lower = higher chance of collision)
+        const BACKOFF_MAX = 500; // ms: Maximum backoff time
+
+        const consoleOutput = document.getElementById('console');
+        const diagramContainer = document.getElementById('network-diagram');
+        const numDevicesInput = document.getElementById('numDevices');
+        const transmitBtn = document.getElementById('transmit-btn');
+
+        // --- Utility Functions ---
+
+        /** Generates a random, valid-looking MAC address. */
+        function generateMac() {
+            // Generate 6 hex pairs
+            const hex = () => Math.floor(Math.random() * 256).toString(16).padStart(2, '0').toUpperCase();
+            return `${hex()}:${hex()}:${hex()}:${hex()}:${hex()}:${hex()}`;
+        }
+
+        /** Helper function to log messages to the console with styling */
+        function log(message, type = 'log-info') {
+            const time = new Date().toLocaleTimeString('en-US', { hour12: false });
+            consoleOutput.innerHTML += `[${time}] <span class="${type}">${message}</span>\n`;
+            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+        }
+
+        // --- Core Simulation Logic ---
+
+        /** Initializes devices and renders the network diagram. */
+        function initializeNetwork() {
+            if (isSimulating) {
+                log('Cannot reset while a simulation is active.', 'log-collision');
+                return;
+            }
+
+            const count = parseInt(numDevicesInput.value);
+            devices = [];
+            diagramContainer.innerHTML = '';
+            consoleOutput.innerHTML = '';
+
+            for (let i = 0; i < count; i++) {
+                const mac = generateMac();
+                devices.push({
+                    id: `D${i + 1}`,
+                    mac: mac,
+                    status: 'Idle', // Idle, Transmitting, Colliding, Backoff
+                    element: null, // HTML element reference
+                });
+            }
+            
+            // Render the devices
+            devices.forEach(device => {
+                const element = document.createElement('div');
+                element.id = device.id;
+                element.className = 'device-icon text-center p-3 rounded-xl border border-gray-300 bg-gray-100 hover:bg-gray-200';
+                element.innerHTML = `
+                    <svg class="w-8 h-8 mx-auto text-emerald-700" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15h-1V9h2v8zm3-4h-1V9h2v4z"/>
+                    </svg>
+                    <span class="block text-xs font-semibold mt-1">${device.id}</span>
+                    <span class="block text-xs font-mono text-gray-500">${device.mac}</span>
+                    <span id="${device.id}-status" class="block text-xs font-medium mt-1 text-gray-500">${device.status}</span>
+                `;
+                diagramContainer.appendChild(element);
+                device.element = element;
+            });
+            
+            log(`Network initialized with ${count} devices in ONE Collision Domain.`, 'log-info');
+            transmitBtn.disabled = false;
+        }
+
+        /** Updates the visual status of a device */
+        function updateDeviceStatus(device, status) {
+            device.status = status;
+            const statusEl = document.getElementById(`${device.id}-status`);
+            
+            device.element.classList.remove('device-transmitting', 'device-colliding');
+            
+            if (status === 'Transmitting') {
+                device.element.classList.add('device-transmitting');
+                statusEl.className = 'block text-xs font-medium mt-1 text-yellow-600';
+            } else if (status === 'Colliding') {
+                device.element.classList.add('device-colliding');
+                statusEl.className = 'block text-xs font-bold mt-1 text-red-600';
+            } else if (status === 'Success') {
+                statusEl.className = 'block text-xs font-bold mt-1 text-green-600';
+            } else if (status === 'Backoff') {
+                statusEl.className = 'block text-xs font-medium mt-1 text-indigo-600';
+            } else {
+                statusEl.className = 'block text-xs font-medium mt-1 text-gray-500';
+            }
+            statusEl.textContent = status;
+        }
+
+
+        /** Main function to run the CSMA/CD cycle for all devices */
+        async function startTransmissionCycle() {
+            if (isSimulating) return;
+
+            isSimulating = true;
+            transmitBtn.disabled = true;
+            
+            log('\n======================================================', 'log-step');
+            log('CSMA/CD Cycle Start: All devices prepare to send.', 'log-step');
+            log('======================================================', 'log-step');
+
+            // 1. Devices attempt to transmit at a slightly random time
+            const transmissionAttempts = devices.map(device => ({
+                device,
+                attemptTime: Math.random() * 1000, // Random time between 0ms and 1000ms
+            }));
+
+            // Sort attempts by time to simulate sequential sensing
+            transmissionAttempts.sort((a, b) => a.attemptTime - b.attemptTime);
+
+            let hasCollision = false;
+            let successfulTransmission = null;
+            let transmittingNow = [];
+
+            // 2. Iterate through sorted attempts (simulating carrier sensing)
+            for (const { device, attemptTime } of transmissionAttempts) {
+                
+                // --- Carrier Sense ---
+                if (transmittingNow.length > 0) {
+                    // Carrier is busy! Device must defer.
+                    log(`${device.id} (${device.mac}) attempted at ${attemptTime.toFixed(0)}ms. Carrier sense: BUSY (Deferring).`, 'log-device');
+                    updateDeviceStatus(device, 'Deferring');
+                    await new Promise(r => setTimeout(r, 50)); // Small delay for visualization
+                    updateDeviceStatus(device, 'Idle');
+                    continue; 
+                }
+
+                // --- Transmission Attempt ---
+                log(`${device.id} (${device.mac}) attempted at ${attemptTime.toFixed(0)}ms. Carrier sense: CLEAR. Transmitting...`, 'log-device');
+                updateDeviceStatus(device, 'Transmitting');
+                transmittingNow.push(device);
+                
+                // Check if any other device in the remaining list attempts transmission within the window
+                const simultaneousAttempts = transmissionAttempts.filter(
+                    a => a.device.id !== device.id && a.attemptTime < attemptTime + TRANSMISSION_WINDOW
+                );
+
+                if (simultaneousAttempts.length > 0) {
+                    // --- Collision Detected ---
+                    hasCollision = true;
+                    log(`Collision Detected! ${device.id} and ${simultaneousAttempts.map(a => a.device.id).join(', ')} transmitted within ${TRANSMISSION_WINDOW}ms.`, 'log-collision');
+                    
+                    // Mark all involved devices as colliding
+                    transmittingNow.forEach(d => updateDeviceStatus(d, 'Colliding'));
+                    simultaneousAttempts.forEach(a => updateDeviceStatus(a.device, 'Colliding'));
+                    
+                    await new Promise(r => setTimeout(r, 800)); // Show collision visually
+                    
+                    // --- Backoff ---
+                    const collidingDevices = [...transmittingNow, ...simultaneousAttempts.map(a => a.device)];
+                    collidingDevices.forEach(d => {
+                        const backoffTime = Math.ceil(Math.random() * BACKOFF_MAX);
+                        log(`${d.id}: Collision. Initiating random Backoff for ${backoffTime}ms.`, 'log-info');
+                        updateDeviceStatus(d, `Backoff (${backoffTime}ms)`);
+                    });
+                    
+                    // Stop this cycle as the collision disrupted everything
+                    break; 
+
+                } else {
+                    // --- Successful Transmission ---
+                    successfulTransmission = device;
+                    log(`${device.id}: Transmission SUCCESSFUL! No other signals detected.`, 'log-success');
+                    updateDeviceStatus(device, 'Success');
+                    await new Promise(r => setTimeout(r, 1000)); // Show success visually
+                    
+                    // After a successful transmission, the medium is busy, and subsequent devices must defer.
+                    break;
+                }
+            }
+            
+            if (!hasCollision && !successfulTransmission) {
+                log('No device attempted transmission this cycle.', 'log-info');
+            }
+
+            // Reset all devices to Idle after the cycle concludes
+            devices.forEach(device => {
+                if (device.status !== 'Idle') {
+                    updateDeviceStatus(device, 'Idle');
+                }
+            });
+
+            log('======================================================', 'log-step');
+            log('CSMA/CD Cycle Complete.', 'log-step');
+            log('======================================================', 'log-step');
+
+            isSimulating = false;
+            transmitBtn.disabled = false;
+        }
+
+        // Initialize on load
+        document.addEventListener('DOMContentLoaded', initializeNetwork);
+
+    </script>
+</body>
+</html>

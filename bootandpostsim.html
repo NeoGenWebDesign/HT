@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Boot & POST Sequence Simulator</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Consolas', 'Courier New', monospace;
+            background: linear-gradient(180deg, #353636 50%, #032a36 75%);
+            min-height: 100vh;
+        }
+        a {
+            display: block;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            text-align: center;
+        }
+        .container-card {
+            background: linear-gradient(180deg, #f7f5f5 5%, #cacacaa8 75%);
+            min-height: 20vh;
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+            padding: 2rem;
+            border-bottom: 5px solid;
+            transition: all 0.3s ease;
+        }
+        .log-container {
+            height: 350px;
+            overflow-y: auto;
+            background-color: #0f172a; /* Slate 900 */
+            color: #e2e8f0; /* Slate 200 */
+            font-family: 'Consolas', 'Courier New', monospace;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            font-size: 0.9rem;
+        }
+        .log-stage { color: #facc15; font-weight: bold; } /* Yellow */
+        .log-success { color: #4ade80; } /* Green */
+        .log-info { color: #94a3b8; } /* Slate 400 */
+
+        .component-status {
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+        }
+        .status-idle { background-color: #888787; color: #65d325; } /* Red */
+        .status-testing { background-color: #fde047; color: #854d0e; } /* Yellow */
+        .status-ready { background-color: #86efad; color: #14532d; } /* Green */
+        .status-active { background-color: #93c5fd; color: #1e40af; } /* Blue */
+    </style>
+</head>
+<body class="p-4 md:p-10 min-h-screen">
+
+    <div class="max-w-7xl mx-auto">
+        <h1 class="text-4xl font-extrabold text-orange-500 mb-2 text-center">
+            System Boot and POST Sequence
+        </h1>
+        <p class="text-lg text-white mb-8 text-center">
+            Simulating the crucial startup process that initializes hardware and loads the operating system.
+        </p>
+        <p class="text-sm text-yellow-500 mb-8 text-center">
+            Press F5 or Reload/Refresh Browser to Reset Simulation.
+        </p>
+        <a id="link" class="text-sm hover:text-lime-500 text-yellow-200 mb-8 text-center" href="index.html">
+            Back to Simulations Index
+        </a>
+
+        
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            <!-- Hardware Components Status -->
+            <div class="lg:col-span-1">
+                <div class="container-card border-teal-600 h-full">
+                    <h3 class="text-2xl font-bold text-orange-400 mb-4">Hardware Status</h3>
+                    <div id="cpu-status" class="component-status status-idle">CPU: Initializing...</div>
+                    <div id="ram-status" class="component-status status-idle">RAM: Awaiting Test</div>
+                    <div id="bios-status" class="component-status status-idle">BIOS: Cold Boot</div>
+                    <div id="hdd-status" class="component-status status-idle">HDD/SSD: Standby</div>
+                    <div id="vga-status" class="component-status status-idle">Video: No Output</div>
+
+                    <button id="start-btn" onclick="startBootProcess()" class="mt-8 w-full bg-violet-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-150">
+                        Press the Power Button
+                    </button>
+                    <button id="reset-btn" onclick="resetSimulation()" class="mt-4 w-full bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-6 rounded-lg shadow-md transition duration-150 hidden">
+                        Power Off / Reset
+                    </button>
+                </div>
+            </div>
+
+            <!-- Simulation Log -->
+            <div class="container-card border-gray-700 lg:col-span-2">
+                <h3 class="text-2xl font-bold text-orange-400 mb-4">Step-by-Step Boot Log</h3>
+                <div id="log" class="log-container">
+                    <p class="log-info">System: Ready to begin. Click 'Press the Power Button' to start the simulation.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- State and DOM References ---
+        const log = document.getElementById('log');
+        const startBtn = document.getElementById('start-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const components = {
+            cpu: document.getElementById('cpu-status'),
+            ram: document.getElementById('ram-status'),
+            bios: document.getElementById('bios-status'),
+            hdd: document.getElementById('hdd-status'),
+            vga: document.getElementById('vga-status'),
+        };
+
+        let isRunning = false;
+
+        // --- Utility Functions ---
+
+        /** Updates the status of a specific component element. */
+        function updateStatus(component, statusText, className) {
+            components[component].textContent = statusText;
+            // Remove all existing status classes and add the new one
+            ['status-idle', 'status-testing', 'status-ready', 'status-active'].forEach(cls => {
+                components[component].classList.remove(cls);
+            });
+            components[component].classList.add(className);
+        }
+
+        /** Logs a message to the simulation console with appropriate styling. */
+        function logMessage(text, className = 'log-info') {
+            const entry = document.createElement('p');
+            entry.className = className;
+            entry.textContent = `[T+${Date.now() - startTime}ms] ${text}`;
+            log.appendChild(entry);
+            log.scrollTop = log.scrollHeight;
+        }
+
+        /** Delays execution to simulate time passage. */
+        const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+        let startTime = 0;
+
+        // --- Core Simulation Logic ---
+
+        async function startBootProcess() {
+            if (isRunning) return;
+            isRunning = true;
+            startBtn.disabled = true;
+            resetBtn.classList.add('hidden');
+            log.innerHTML = '';
+            startTime = Date.now();
+
+            logMessage(`\n--- STAGE 1: POWER & INITIALIZATION ---`, 'text-lg log-stage');
+            
+            // 1. Power Good Signal
+            await delay(500);
+            logMessage(`(1) Power Supply sends "Power Good" signal (PG).`);
+            updateStatus('cpu', 'CPU: Received Power Good, Starting...', 'status-active');
+
+            // 2. CPU Jump
+            await delay(1000);
+            logMessage(`(2) CPU executes bootstrap code at reset vector (FFFF:0000).`, 'log-info');
+            updateStatus('bios', 'BIOS: Loaded into memory, starting POST...', 'status-active');
+            updateStatus('cpu', 'CPU: Running BIOS Code', 'status-active');
+
+            logMessage(`\n--- STAGE 2: POWER-ON SELF-TEST (POST) ---`, 'text-lg log-stage');
+
+            // 3. POST - Essential Hardware Check (CPU, Clock)
+            await delay(1500);
+            logMessage(`(3) BIOS checks internal CPU registers and clock circuitry.`, 'log-success');
+
+            // 4. POST - RAM Testing
+            await delay(2000);
+            updateStatus('ram', 'RAM: Running Memory Test (Quick Check)', 'status-testing');
+            logMessage(`(4) BIOS performs a quick memory test (read/write to ensure address lines work).`, 'log-info');
+            
+            await delay(2500);
+            updateStatus('ram', 'RAM: Test Passed, Initialized', 'status-ready');
+            logMessage(`(5) RAM Test successful. Total memory detected and initialized.`, 'log-success');
+
+            // 5. POST - Video Initialization
+            await delay(1000);
+            updateStatus('vga', 'Video: Initializing VRAM/Display', 'status-testing');
+            logMessage(`(6) BIOS initializes the video adapter (VGA/onboard). Display output starts.`, 'log-info');
+            
+            await delay(1500);
+            updateStatus('vga', 'Video: Ready', 'status-ready');
+            logMessage(`(7) Video Initialization successful. User sees POST screen/BIOS logo.`, 'log-success');
+            
+            // 6. POST - Peripheral Detection (HDD, USB, etc.)
+            await delay(1500);
+            updateStatus('hdd', 'HDD/SSD: Detecting...', 'status-testing');
+            logMessage(`(8) BIOS searches for and configures peripherals based on CMOS settings (HDD, USB, Keyboard).`, 'log-info');
+            
+            await delay(1500);
+            updateStatus('hdd', 'HDD/SSD: Detected & Initialized', 'status-ready');
+            logMessage(`(9) Boot drives and peripherals detected successfully. POST is complete!`, 'log-success font-bold');
+            updateStatus('bios', 'BIOS: POST Complete', 'status-ready');
+
+            logMessage(`\n--- STAGE 3: BOOT SEQUENCE ---`, 'text-lg log-stage');
+
+            // 7. Bootloader Execution
+            await delay(2000);
+            logMessage(`(10) BIOS uses Boot Order to find the Boot Device (HDD).`, 'log-info');
+            logMessage(`(11) BIOS reads the Master Boot Record (MBR) or GPT boot sector (first 512 bytes).`);
+            updateStatus('hdd', 'HDD/SSD: Reading Boot Sector', 'status-active');
+
+            await delay(1500);
+            logMessage(`(12) The Bootloader (e.g., GRUB, Windows Boot Manager) is loaded into RAM and executed.`, 'log-success font-bold');
+            updateStatus('cpu', 'CPU: Running Bootloader Code', 'status-active');
+
+            // 8. OS Load
+            await delay(2500);
+            logMessage(`(13) The Bootloader locates the Operating System kernel files on the disk.`, 'log-info');
+            logMessage(`(14) Kernel and necessary drivers are loaded into memory. OS takes control of the hardware.`, 'log-success font-bold');
+            updateStatus('cpu', 'CPU: Running OS Kernel', 'status-ready');
+            updateStatus('hdd', 'HDD/SSD: OS Loading Data', 'status-ready');
+
+            // 9. Final Stage
+            await delay(1000);
+            logMessage(`(15) System has successfully booted!`, 'text-2xl text-green-500 font-extrabold');
+
+            isRunning = false;
+            startBtn.classList.add('hidden');
+            resetBtn.classList.remove('hidden');
+            startBtn.disabled = false;
+        }
+
+        function resetSimulation() {
+            if (isRunning) return;
+            log.innerHTML = '<p class="log-info">System: Ready to begin. Click \'Press the Power Button\' to start the simulation.</p>';
+            
+            // Reset all components to initial state
+            updateStatus('cpu', 'CPU: Initializing...', 'status-idle');
+            updateStatus('ram', 'RAM: Awaiting Test', 'status-idle');
+            updateStatus('bios', 'BIOS: Cold Boot', 'status-idle');
+            updateStatus('hdd', 'HDD/SSD: Standby', 'status-idle');
+            updateStatus('vga', 'Video: No Output', 'status-idle');
+
+            startBtn.classList.remove('hidden');
+            resetBtn.classList.add('hidden');
+            startBtn.disabled = false;
+        }
+
+        // Initialize on load
+        window.onload = function() {
+            resetSimulation();
+        };
+
+    </script>
+</body>
+</html>

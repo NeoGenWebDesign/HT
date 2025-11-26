@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Speed and OSI Model Simulator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Consolas', 'Courier New', monospace;
+            background: linear-gradient(180deg, #353636 50%, #032a36 75%);
+            min-height: 100vh;
+        }
+        a {
+            display: block;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            text-align: center;
+        }
+        .osi-layer {
+            transition: all 0.5s ease-in-out;
+            transform-origin: left;
+        }
+        .layer-bar {
+            height: 12px;
+            border-radius: 4px;
+            transition: width 0.5s ease-out;
+        }
+    </style>
+    <script>
+        // --- Simulation Constants ---
+        // Speeds in Mbps (Megabits per second)
+        const COPPER_SPEED_MBPS = 1000; // Typical Gigabit Ethernet (1000Base-T)
+        const FIBER_SPEED_MBPS = 10000; // Typical 10-Gigabit Fiber (10GBASE-LR)
+        
+        // Latency constants (ms per km). Fiber is often micro-seconds, but we use ms for calculation clarity.
+        const COPPER_LATENCY_MS_KM = 0.0055; 
+        const FIBER_LATENCY_MS_KM = 0.005;
+
+        // Base processing time constants (ms) for the 7 layers of the OSI model.
+        // These are simplified, fixed processing times for data encapsulation/decapsulation.
+        const LAYER_PROCESSING_MS = {
+            7: 5,  // Application
+            6: 4,  // Presentation
+            5: 3,  // Session
+            4: 2,  // Transport
+            3: 2,  // Network
+            2: 2,  // Data Link
+            1: 0,  // Physical (Transmission time is calculated separately)
+        };
+        
+        // --- Utility Functions ---
+
+        // Calculates the total time based on user inputs and medium properties
+        function calculateTime(dataMB, distanceKM, speedMbps, latencyMsKm) {
+            // 1. Calculate Processing Time (Encapsulation/Decapsulation)
+            let processingTime = Object.values(LAYER_PROCESSING_MS).reduce((a, b) => a + b, 0) * 2; // Tx and Rx
+            
+            // 2. Calculate Transmission Time (Time to push the bits onto the medium)
+            // Data Size: MB to bits (1 MB = 8 * 1024 * 1024 bits)
+            const dataBits = dataMB * 8 * 1024 * 1024; 
+            // Speed: Mbps to bits/s
+            const speedBps = speedMbps * 1000000; 
+            // Transmission Time (seconds)
+            const transmissionTimeSec = dataBits / speedBps;
+            const transmissionTimeMs = transmissionTimeSec * 1000;
+
+            // 3. Calculate Propagation Delay (Latency - time for the signal to travel the wire)
+            // Signal travels both ways (2x distance)
+            const propagationDelayMs = distanceKM * latencyMsKm * 2; 
+
+            // 4. Total Time
+            const totalTime = processingTime + transmissionTimeMs + propagationDelayMs;
+            
+            return {
+                processingTime: processingTime,
+                transmissionTime: transmissionTimeMs,
+                propagationDelay: propagationDelayMs,
+                totalTime: totalTime,
+                layerTimes: LAYER_PROCESSING_MS,
+            };
+        }
+
+        // Renders the OSI layer visualization
+        function renderOSISimulation(medium, dataMB, distanceKM) {
+            const speedMbps = (medium === 'fiber') ? FIBER_SPEED_MBPS : COPPER_SPEED_MBPS;
+            const latencyMsKm = (medium === 'fiber') ? FIBER_LATENCY_MS_KM : COPPER_LATENCY_MS_KM;
+
+            const results = calculateTime(dataMB, distanceKM, speedMbps, latencyMsKm);
+            
+            // Render total results
+            document.getElementById(`${medium}-total-time`).textContent = `${results.totalTime.toFixed(2)} ms`;
+            document.getElementById(`${medium}-tx-time`).textContent = `${results.transmissionTime.toFixed(2)} ms`;
+            document.getElementById(`${medium}-prop-time`).textContent = `${results.propagationDelay.toFixed(2)} ms`;
+
+            // Animate layer bars
+            const totalTimeForScale = results.totalTime;
+            
+            // Function to calculate width percentage based on time relative to total
+            const getWidthPercent = (time) => (time / totalTimeForScale) * 100;
+            
+            // Update individual layer bars
+            const layerOrder = [7, 6, 5, 4, 3, 2]; // Layers with fixed processing time (Tx + Rx)
+            layerOrder.forEach(layerNum => {
+                const layerTime = LAYER_PROCESSING_MS[layerNum] * 2; // Tx and Rx time
+                const width = getWidthPercent(layerTime);
+                const layerBar = document.getElementById(`${medium}-layer-${layerNum}-bar`);
+                if (layerBar) {
+                    layerBar.style.width = `${Math.max(width, 2)}%`; // Ensure min width for visibility
+                    layerBar.title = `Processing: ${layerTime} ms`;
+                }
+            });
+
+            // Update Physical Layer (Layer 1) - Transmission Time + Propagation Delay
+            const physicalTime = results.transmissionTime + results.propagationDelay;
+            const physicalWidth = getWidthPercent(physicalTime);
+            const physicalBar = document.getElementById(`${medium}-layer-1-bar`);
+            if (physicalBar) {
+                physicalBar.style.width = `${Math.max(physicalWidth, 2)}%`;
+                physicalBar.title = `Tx/Prop. Time: ${physicalTime.toFixed(2)} ms`;
+            }
+
+            // Set colors for the summary card
+            const card = document.getElementById(`${medium}-card`);
+            if (results.totalTime > 20) { // arbitrary threshold for slow
+                card.classList.remove('border-green-500', 'border-yellow-500');
+                card.classList.add('border-red-500');
+            } else if (results.totalTime > 5) {
+                card.classList.remove('border-green-500', 'border-red-500');
+                card.classList.add('border-yellow-500');
+            } else {
+                card.classList.remove('border-yellow-500', 'border-red-500');
+                card.classList.add('border-green-500');
+            }
+        }
+
+
+        // --- Main Simulation Logic ---
+        function runSimulation() {
+            const dataSizeInput = document.getElementById('data-size');
+            const distanceInput = document.getElementById('cable-distance');
+            
+            let dataMB = parseFloat(dataSizeInput.value);
+            let distanceKM = parseFloat(distanceInput.value);
+
+            // Validation
+            if (isNaN(dataMB) || dataMB <= 0) dataMB = 1;
+            if (isNaN(distanceKM) || distanceKM <= 0) distanceKM = 0.1;
+
+            dataSizeInput.value = dataMB;
+            distanceInput.value = distanceKM;
+
+            // Run for both mediums
+            renderOSISimulation('copper', dataMB, distanceKM);
+            renderOSISimulation('fiber', dataMB, distanceKM);
+        }
+
+        window.onload = () => {
+            // Initial run
+            runSimulation();
+            
+            // Attach event listeners for dynamic updates
+            document.getElementById('data-size').addEventListener('input', runSimulation);
+            document.getElementById('cable-distance').addEventListener('input', runSimulation);
+        };
+    </script>
+</head>
+<body class="min-h-screen p-4 sm:p-8">
+    
+    <div class="max-w-6xl mx-auto">
+        <header class="text-center mb-10">
+            <h1 class="text-4xl sm:text-5xl font-extrabold text-orange-500 mb-2">Network Speed & OSI Model Simulator</h1>
+            <p class="text-2xl text-white">Analyze Copper vs. Fiber performance across the 7 Layers of the OSI Model.</p>
+            <p class="text-sm text-yellow-500 mb-8 text-center">
+            Press F5 or Reload/Refresh Browser to Reset Simulation.
+        </p>
+        <a id="link" class="text-sm hover:text-lime-500 text-yellow-200 mb-8 text-center" href="index.html">
+            Back to Simulations Index
+        </a>
+        </header>
+
+        <main>
+            <div class="bg-white p-6 rounded-xl shadow-lg mb-8 border-t-4 border-orange-600">
+                <h2 class="text-2xl font-bold text-teal-700 mb-4">Input Parameters</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label for="data-size" class="block text-sm font-medium text-gray-700">Data Size (MB) - <span class="text-xs text-gray-500">How much data is being sent?</span></label>
+                        <input type="number" id="data-size" value="10" min="0.1" step="0.1" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2 border">
+                    </div>
+                    <div>
+                        <label for="cable-distance" class="block text-sm font-medium text-gray-700">Cable Distance (km) - <span class="text-xs text-gray-500">How far does the signal travel?</span></label>
+                        <input type="number" id="cable-distance" value="5" min="0.1" step="0.1" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2 border">
+                    </div>
+                </div>
+            </div>
+
+            <h2 class="text-3xl font-bold text-gray-200 mb-6 text-center">Data Flow Visualization (Time in Milliseconds)</h2>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                
+                <!-- Copper Ethernet Card -->
+                <div id="copper-card" class="bg-white p-6 rounded-xl shadow-2xl transition-all duration-300 border-l-8 border-yellow-500">
+                    <h3 class="text-2xl font-extrabold text-orange-400 mb-4 text-center">Copper Ethernet (1 Gbps)</h3>
+                    
+                    <div class="mb-4 p-3 bg-gray-100 rounded-lg text-center font-semibold">
+                        TOTAL TIME: <span id="copper-total-time" class="text-3xl text-red-500 font-extrabold">0.00 ms</span>
+                    </div>
+
+                    <div id="copper-osi-model" class="space-y-3">
+                        <!-- OSI Layers -->
+                        <div class="osi-layer">
+                            <span class="font-medium text-gray-700">7. Application</span>
+                            <div class="layer-bar bg-blue-500" id="copper-layer-7-bar" title="Processing Time"></div>
+                        </div>
+                        <div class="osi-layer">
+                            <span class="font-medium text-gray-700">6. Presentation</span>
+                            <div class="layer-bar bg-blue-500" id="copper-layer-6-bar" title="Processing Time"></div>
+                        </div>
+                        <div class="osi-layer">
+                            <span class="font-medium text-gray-700">5. Session</span>
+                            <div class="layer-bar bg-blue-500" id="copper-layer-5-bar" title="Processing Time"></div>
+                        </div>
+                        <div class="osi-layer">
+                            <span class="font-medium text-gray-700">4. Transport</span>
+                            <div class="layer-bar bg-blue-500" id="copper-layer-4-bar" title="Processing Time"></div>
+                        </div>
+                        <div class="osi-layer">
+                            <span class="font-medium text-gray-700">3. Network</span>
+                            <div class="layer-bar bg-blue-500" id="copper-layer-3-bar" title="Processing Time"></div>
+                        </div>
+                        <div class="osi-layer">
+                            <span class="font-medium text-gray-700">2. Data Link</span>
+                            <div class="layer-bar bg-blue-500" id="copper-layer-2-bar" title="Processing Time"></div>
+                        </div>
+                        <div class="osi-layer border-t pt-2 border-gray-200">
+                            <span class="font-extrabold text-red-700">1. Physical (Transmission)</span>
+                            <div class="layer-bar bg-red-500" id="copper-layer-1-bar" title="Transmission and Propagation Time"></div>
+                        </div>
+                    </div>
+
+                    <div class="mt-6 text-sm text-gray-600 space-y-1">
+                        <p><span class="font-semibold">Tx Time (Data Size/Speed):</span> <span id="copper-tx-time">0.00 ms</span></p>
+                        <p><span class="font-semibold">Prop. Delay (Latency/Dist.):</span> <span id="copper-prop-time">0.00 ms</span></p>
+                    </div>
+                </div>
+
+                <!-- Fiber Optic Card -->
+                <div id="fiber-card" class="bg-white p-6 rounded-xl shadow-2xl transition-all duration-300 border-l-8 border-green-500">
+                    <h3 class="text-2xl font-extrabold text-teal-600 mb-4 text-center">Fiber Optic (10 Gbps)</h3>
+                    
+                    <div class="mb-4 p-3 bg-gray-100 rounded-lg text-center font-semibold">
+                        TOTAL TIME: <span id="fiber-total-time" class="text-3xl text-green-500 font-extrabold">0.00 ms</span>
+                    </div>
+
+                    <div id="fiber-osi-model" class="space-y-3">
+                        <!-- OSI Layers -->
+                        <div class="osi-layer">
+                            <span class="font-medium text-gray-700">7. Application</span>
+                            <div class="layer-bar bg-blue-500" id="fiber-layer-7-bar" title="Processing Time"></div>
+                        </div>
+                        <div class="osi-layer">
+                            <span class="font-medium text-gray-700">6. Presentation</span>
+                            <div class="layer-bar bg-blue-500" id="fiber-layer-6-bar" title="Processing Time"></div>
+                        </div>
+                        <div class="osi-layer">
+                            <span class="font-medium text-gray-700">5. Session</span>
+                            <div class="layer-bar bg-blue-500" id="fiber-layer-5-bar" title="Processing Time"></div>
+                        </div>
+                        <div class="osi-layer">
+                            <span class="font-medium text-gray-700">4. Transport</span>
+                            <div class="layer-bar bg-blue-500" id="fiber-layer-4-bar" title="Processing Time"></div>
+                        </div>
+                        <div class="osi-layer">
+                            <span class="font-medium text-gray-700">3. Network</span>
+                            <div class="layer-bar bg-blue-500" id="fiber-layer-3-bar" title="Processing Time"></div>
+                        </div>
+                        <div class="osi-layer">
+                            <span class="font-medium text-gray-700">2. Data Link</span>
+                            <div class="layer-bar bg-blue-500" id="fiber-layer-2-bar" title="Processing Time"></div>
+                        </div>
+                        <div class="osi-layer border-t pt-2 border-gray-200">
+                            <span class="font-extrabold text-red-700">1. Physical (Transmission)</span>
+                            <div class="layer-bar bg-red-500" id="fiber-layer-1-bar" title="Transmission and Propagation Time"></div>
+                        </div>
+                    </div>
+
+                    <div class="mt-6 text-sm text-gray-600 space-y-1">
+                        <p><span class="font-semibold">Tx Time (Data Size/Speed):</span> <span id="fiber-tx-time">0.00 ms</span></p>
+                        <p><span class="font-semibold">Prop. Delay (Latency/Dist.):</span> <span id="fiber-prop-time">0.00 ms</span></p>
+                    </div>
+                </div>
+                
+            </div>
+            
+            <div class="mt-12 p-6 bg-white rounded-xl shadow-lg border-l-4 border-orange-500">
+                <h3 class="text-2xl font-bold text-gray-800 mb-3">How the OSI Model is Simulated:</h3>
+                <p class="text-gray-700">
+                    The total time is calculated as the sum of **Processing Time** (Layers 2-7, 
+                    representing encapsulation/decapsulation overhead at the sender and receiver) and 
+                    **Physical Time** (Layer 1).
+                </p>
+                <ul class="list-disc ml-6 mt-2 text-gray-700 space-y-1">
+                    <li><span class="font-semibold text-teal-600">Layers 2-7 (Processing):</span> This time is kept constant for both mediums, as it represents the CPU workload for preparing and reading the data (e.g., segmenting data, adding headers, checking checksums). This processing step is where data "spends time" inside the device before transmission. [Image of the 7 layers of the OSI model]</li>
+                    <li><span class="font-semibold text-pink-600">Layer 1 (Physical Time):</span> This is where the major difference lies, determined by two factors:
+                        <ul class="list-circle ml-4 text-sm mt-1">
+                            <li><span class="font-medium">Transmission Time:</span> Time taken to push the entire data size onto the wire (Data Size / Link Speed). This is vastly better for Fiber (10 Gbps) than Copper (1 Gbps).</li>
+                            <li><span class="font-medium">Propagation Delay:</span> Time for the signal (light or electric pulse) to travel the distance (Latency * Distance). Fiber typically offers slightly lower latency over long distances.</li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+        </main>
+    </div>
+</body>
+</html>

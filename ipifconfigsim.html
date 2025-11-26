@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Interface Configuration Simulator</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Consolas', 'Courier New', monospace;
+            background: linear-gradient(180deg, #353636 50%, #032a36 75%);
+            min-height: 100vh;
+        }
+        a {
+            display: block;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            text-align: center;
+        }
+        .container-card {
+            background-color: rgb(219, 217, 217);
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+            padding: 2rem;
+            border-bottom: 5px solid;
+            transition: all 0.3s ease;
+        }
+        .terminal {
+            background-color: #0f172a; /* Slate 900 */
+            color: #10b981; /* Emerald 500 */
+            font-family: 'Consolas', 'Courier New', monospace;
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            min-height: 100px;
+        }
+        .log-container {
+            height: 400px;
+            overflow-y: auto;
+            background-color: #1e293b; /* Slate 800 */
+            color: #e2e8f0; /* Slate 200 */
+            font-family: 'Consolas', 'Courier New', monospace;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            font-size: 0.85rem;
+            line-height: 1.4;
+        }
+        .log-stage { color: #f97316; font-weight: bold; } /* Orange */
+        .log-info { color: #94a3b8; } /* Slate 400 */
+        .log-data { color: #22c55e; font-weight: bold; } /* Green */
+        .log-result { color: #3b82f6; } /* Blue */
+        
+        .output-block {
+            background-color: #0f172a;
+            color: white;
+            padding: 1rem;
+            margin-top: 1rem;
+            border-radius: 0.5rem;
+        }
+        .output-block h4 {
+            color: #38bdf8; /* Sky 400 */
+            font-size: 1.1rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+            border-bottom: 1px dashed #334155;
+            padding-bottom: 0.25rem;
+        }
+        .output-block p {
+            margin: 0.2rem 0;
+            padding-left: 1rem;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-10 min-h-screen">
+
+    <div class="max-w-6xl mx-auto">
+        <h1 class="text-4xl font-extrabold text-orange-500 mb-2 text-center">
+            Network Interface Configuration Simulator
+        </h1>
+        <p class="text-lg text-white mb-8 text-center">
+            Simulating how the operating system kernel provides configuration details for active interfaces (analogous to `ipconfig /all` or `ifconfig -a`).
+        </p>
+        <p class="text-sm text-yellow-500 mb-8 text-center">
+            Press F5 or Reload/Refresh Browser to Reset Simulation.
+        </p>
+        <a id="link" class="text-sm hover:text-lime-500 text-yellow-200 mb-8 text-center" href="index.html">
+            Back to Simulations Index
+        </a>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            <!-- Terminal and Control -->
+            <div class="container-card border-indigo-600">
+                <h3 class="text-2xl font-bold text-teal-800 mb-4">Command Execution</h3>
+                <div id="terminal-input" class="terminal">
+                    $ <span class="text-white">ipconfig /all</span> <span class="text-gray-400"> (or ifconfig -a)</span>
+                </div>
+                
+                <p class="mt-4 text-gray-600 italic">
+                    This command forces the OS to retrieve all configuration details, including hardware (MAC) and dynamic (DHCP) information.
+                </p>
+
+                <button id="start-btn" onclick="startConfigProcess()" class="mt-6 w-full bg-teal-600 hover:bg-teal-800 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-150">
+                    Query Kernel for Config
+                </button>
+                <button id="reset-btn" onclick="resetSimulation()" class="mt-4 w-full bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-6 rounded-lg shadow-md transition duration-150 hidden">
+                    Reset
+                </button>
+            </div>
+
+            <!-- Simulation Log -->
+            <div class="container-card border-gray-700">
+                <h3 class="text-2xl font-bold text-gray-800 mb-4">System Log (Kernel Interaction)</h3>
+                <div id="log" class="log-container">
+                    <p class="log-info">System: Ready. Click 'Query Kernel for Config' to trace the system calls.</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Output Display Area -->
+        <div id="terminal-output-area" class="container-card border-purple-600 mt-6 hidden">
+            <h3 class="text-2xl font-bold text-purple-800 mb-4">Terminal Output (Condensed)</h3>
+            <div id="config-output" class="output-block">
+                <!-- Output will be injected here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Simulated Network Interface Data ---
+        // This data simulates what the OS kernel holds for the network adapters.
+        const simulatedInterfaces = [
+            {
+                name: 'Ethernet Adapter Local Area Connection',
+                description: 'Realtek PCIe GbE Family Controller',
+                status: 'Media disconnected',
+                dhcpEnabled: false,
+                macAddress: '00-A0-C9-14-C8-29',
+                ipAddress: null,
+                subnetMask: null,
+                defaultGateway: null,
+                dhcpServer: null,
+                leaseObtained: null,
+                leaseExpires: null,
+            },
+            {
+                name: 'Wireless LAN Adapter Wi-Fi',
+                description: 'Intel(R) Dual Band Wireless-AC 7260',
+                status: 'Media connected',
+                dhcpEnabled: true,
+                macAddress: 'BC-54-A3-78-D1-B4',
+                ipAddress: '192.168.1.105',
+                subnetMask: '255.255.255.0',
+                defaultGateway: '192.168.1.1',
+                dhcpServer: '192.168.1.1',
+                leaseObtained: 'Wednesday, December 6, 2023 10:30:00 AM',
+                leaseExpires: 'Thursday, December 7, 2023 10:30:00 AM',
+            },
+            {
+                name: 'Loopback Pseudo-Interface 1',
+                description: 'Software Loopback Interface',
+                status: 'Media connected',
+                dhcpEnabled: false,
+                macAddress: null, // Loopback doesn't have a MAC
+                ipAddress: '127.0.0.1',
+                subnetMask: '255.0.0.0',
+                defaultGateway: null,
+                dhcpServer: null,
+                leaseObtained: null,
+                leaseExpires: null,
+            },
+        ];
+
+        // --- State Variables and DOM References ---
+        let isRunning = false;
+        const log = document.getElementById('log');
+        const configOutput = document.getElementById('config-output');
+        const outputArea = document.getElementById('terminal-output-area');
+        const startBtn = document.getElementById('start-btn');
+        const resetBtn = document.getElementById('reset-btn');
+
+        // --- Utility Functions ---
+
+        /** Logs a message to the simulation console with appropriate styling. */
+        function logMessage(text, className = 'log-info') {
+            const entry = document.createElement('p');
+            entry.className = className + ' mb-1';
+            entry.textContent = text;
+            log.appendChild(entry);
+            log.scrollTop = log.scrollHeight;
+        }
+
+        /** Delays execution to simulate time passage. */
+        const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+        // --- Core Simulation Logic ---
+
+        async function startConfigProcess() {
+            if (isRunning) return;
+            isRunning = true;
+            startBtn.disabled = true;
+            resetBtn.classList.add('hidden');
+            outputArea.classList.add('hidden');
+            log.innerHTML = '';
+            configOutput.innerHTML = '';
+
+            logMessage(`\n--- STEP 1: COMMAND PARSING AND SYSTEM CALL ---`, 'text-lg log-stage');
+            await delay(1000);
+            logMessage(`(1.1) The command (ipconfig/ifconfig) requests all configuration details ('/all' or '-a').`);
+            logMessage(`(1.2) The command utility executes a system call to the OS Kernel's Networking Subsystem.`, 'log-info');
+            logMessage(`(1.3) **Goal**: Retrieve the list of all Network Interface Cards (NICs) and their current state.`, 'log-info');
+            
+            logMessage(`\n--- STEP 2: KERNEL QUERIES HARDWARE AND CACHE ---`, 'text-lg log-stage');
+            await delay(1500);
+            
+            const outputBlocks = [];
+            for (let i = 0; i < simulatedInterfaces.length; i++) {
+                const iface = simulatedInterfaces[i];
+                logMessage(`[QUERYING] Interface ${i + 1} (${iface.name})...`, 'log-data');
+                await delay(500);
+
+                let blockHTML = `<h4>${iface.name}</h4>`;
+                blockHTML += `<p><span class="text-gray-400">Description:</span> ${iface.description}</p>`;
+                
+                // 2.1 Retrieve MAC Address (Hardware Layer)
+                if (iface.macAddress) {
+                    logMessage(`[READ] Hardware Address (MAC): ${iface.macAddress} (Stored in NIC hardware/Firmware).`, 'log-data');
+                    blockHTML += `<p><span class="text-gray-400">Physical Address:</span> ${iface.macAddress}</p>`;
+                } else {
+                    blockHTML += `<p><span class="text-gray-400">Physical Address:</span> N/A</p>`;
+                }
+                
+                // 2.2 Retrieve IP Information (Protocol Layer)
+                if (iface.ipAddress) {
+                    logMessage(`[READ] IP Address: ${iface.ipAddress} (Read from kernel's TCP/IP stack configuration).`, 'log-data');
+                    blockHTML += `<p><span class="text-gray-400">IPv4 Address:</span> ${iface.ipAddress}</p>`;
+                    blockHTML += `<p><span class="text-gray-400">Subnet Mask:</span> ${iface.subnetMask}</p>`;
+                }
+                
+                // 2.3 Retrieve DHCP Information (DHCP Client Cache)
+                if (iface.dhcpEnabled) {
+                    logMessage(`[READ] DHCP Status: Enabled. Checking DHCP client cache.`, 'log-info');
+                    if (iface.leaseExpires) {
+                        logMessage(`[READ] Lease Expiry: ${iface.leaseExpires} (Read from DHCP client cache file/memory).`, 'log-data');
+                        blockHTML += `<p><span class="text-gray-400">DHCP Server:</span> ${iface.dhcpServer}</p>`;
+                        blockHTML += `<p><span class="text-gray-400">Lease Expires:</span> ${iface.leaseExpires}</p>`;
+                    }
+                }
+
+                outputBlocks.push(blockHTML);
+            }
+            
+            logMessage(`(2.4) All active interface data retrieved from the kernel.`, 'log-success font-bold');
+            
+            logMessage(`\n--- STEP 3: FORMATTING AND DISPLAY ---`, 'text-lg log-stage');
+            await delay(1500);
+
+            logMessage(`(3.1) The retrieved raw data is formatted into a readable structure for the terminal.`, 'log-info');
+            
+            // Generate the output display
+            configOutput.innerHTML = outputBlocks.join('<hr class="my-4 border-gray-700">');
+            outputArea.classList.remove('hidden');
+            
+            logMessage(`(3.2) Output successfully displayed to the user.`, 'log-success font-bold');
+            logMessage(`(3.3) **Kernel Conclusion**: ipconfig/ifconfig is a query tool; it reports the *current state* of the OS's internal network configuration settings.`, 'log-result');
+
+
+            isRunning = false;
+            startBtn.classList.add('hidden');
+            resetBtn.classList.remove('hidden');
+            startBtn.disabled = false;
+        }
+
+        function resetSimulation() {
+            if (isRunning) return;
+            log.innerHTML = '<p class="log-info">System: Ready. Click \'Query Kernel for Config\' to trace the system calls.</p>';
+            outputArea.classList.add('hidden');
+            
+            startBtn.classList.remove('hidden');
+            resetBtn.classList.add('hidden');
+            startBtn.disabled = false;
+        }
+
+        // Initialize on load
+        window.onload = function() {
+            resetSimulation();
+        };
+
+    </script>
+</body>
+</html>

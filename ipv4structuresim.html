@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IPv4 Structure & Subnetting Visualizer</title>
+    <style>
+        :root {
+            --net-color: #e9682c;
+            --host-color: #22db2b;
+            --bg-color: #1e293b;
+            --card-bg: #ffffff;
+            --text-main: #e4e71fb0;
+        }
+
+        body {
+            font-family: 'Consolas', 'Courier New', monospace;
+            background: linear-gradient(180deg, #353636 50%, #032a36 75%);
+            min-height: 100vh;
+            color: var(--text-main);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            margin: 0;
+        }
+        a {
+            display: block;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            text-align: center;
+            color: #f3f3f1d3;
+        }
+
+        h1 { margin-bottom: 5px; color: var(--net-color); }
+        p.subtitle { max-width: 600px; text-align: center; color: #f8f6f7; margin-bottom: 30px; }
+
+        /* Controls */
+        .controls {
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            display: flex;
+            gap: 30px;
+            align-items: center;
+            margin-bottom: 40px;
+            background-color: #cdd7e4;
+        }
+
+        .input-group { display: flex; flex-direction: column; gap: 5px; }
+        label { font-weight: bold; font-size: 0.9rem; color: #475569; }
+        
+        input[type="range"] { width: 200px; cursor: pointer; }
+        .cidr-display { font-family: monospace; font-weight: bold; color: var(--net-color); font-size: 1.2rem; }
+
+        /* The Binary/Decimal Visualizer */
+        .visualizer-container {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 40px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .octet-block {
+            background: var(--card-bg);
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+        }
+
+        .octet-label { font-size: 0.8rem; color: #a0c59c; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; }
+
+        /* The 8 Bits */
+        .bits-row { display: flex; gap: 4px; margin-bottom: 10px; }
+        
+        .bit-btn {
+            width: 30px; height: 40px;
+            border: 2px solid #35475e;
+            border-radius: 4px;
+            background: white;
+            font-family: 'Courier New', monospace;
+            font-size: 1.2rem;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .bit-btn:hover { transform: translateY(-2px); }
+        
+        /* Bit Values (128, 64, etc) helper text */
+        .bit-value-label {
+            font-size: 0.6rem; color: #cbd5e1; text-align: center; position: absolute; top: -15px; width: 100%;
+        }
+
+        /* Network vs Host coloring */
+        .bit-btn.network { background-color: #e9cc7c; border-color: var(--net-color); color: var(--net-color); }
+        .bit-btn.host { background-color: #a0e989; border-color: var(--host-color); color: var(--host-color); }
+        
+        .decimal-display {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #334155;
+            min-width: 80px;
+            text-align: center;
+            border-top: 2px solid #f1f5f9;
+            padding-top: 5px;
+        }
+
+        /* Dots between octets */
+        .dot-separator {
+            font-size: 3rem; font-weight: bold; color: #cbd5e1; align-self: center; margin-top: -30px;
+        }
+
+        /* Results Panel */
+        .results-panel {
+            width: 100%; max-width: 800px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .result-card {
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 5px solid #ccc;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .result-card.network { border-color: var(--net-color); }
+        .result-card.host { border-color: var(--host-color); }
+
+        .result-title { font-size: 0.85rem; text-transform: uppercase; color: #64748b; font-weight: bold; margin-bottom: 5px; }
+        .result-value { font-family: monospace; font-size: 1.5rem; font-weight: bold; color: #1e293b; }
+        .result-binary { font-family: monospace; font-size: 0.9rem; color: #94a3b8; margin-top: 5px; letter-spacing: 1px; }
+
+        /* Legend */
+        .legend { display: flex; gap: 20px; margin-bottom: 20px; }
+        .legend-item { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; }
+        .legend-box { width: 15px; height: 15px; border-radius: 3px; }
+
+    </style>
+</head>
+<body>
+
+    <h1>IPv4 Structure Visualizer</h1>
+    <p class="subtitle">Click the binary bits (0 or 1) to change the decimal value. Drag the slider to change the Subnet Mask and see how it divides the address.</p>
+    <a class="text-sm hover:text-lime-500 text-yellow-200 mb-8 text-center" href="index.html">
+            Back to Simulations Index
+        </a>
+
+    
+
+[Image of IPv4 header diagram]
+
+
+    <div class="legend">
+        <div class="legend-item">
+            <div class="legend-box" style="background: var(--net-color)"></div>
+            <span>Network Portion</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-box" style="background: var(--host-color)"></div>
+            <span>Host Portion</span>
+        </div>
+    </div>
+
+    <div class="controls">
+        <div class="input-group">
+            <label>Subnet Mask (CIDR)</label>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <input type="range" id="cidrSlider" min="1" max="32" value="24" oninput="updateFromControls()">
+                <span class="cidr-display" id="cidrText">/24</span>
+            </div>
+        </div>
+        <div class="input-group">
+            <label>Quick Reset</label>
+            <button onclick="setIp([192, 168, 1, 10]); updateFromControls();" style="padding: 5px 10px; cursor: pointer;">Reset to 192.168.1.10</button>
+        </div>
+    </div>
+
+    <div class="visualizer-container" id="visualizer">
+        </div>
+
+    <div class="results-panel">
+        <div class="result-card network">
+            <div class="result-title">Network Address (First IP)</div>
+            <div class="result-value" id="res-net-id">0.0.0.0</div>
+            <div class="result-binary" id="res-net-bin">...</div>
+        </div>
+        <div class="result-card host">
+            <div class="result-title">Broadcast Address (Last IP)</div>
+            <div class="result-value" id="res-bcast">0.0.0.0</div>
+            <div class="result-binary" id="res-bcast-bin">...</div>
+        </div>
+        <div class="result-card">
+            <div class="result-title">Subnet Mask</div>
+            <div class="result-value" id="res-mask">255.255.255.0</div>
+        </div>
+        <div class="result-card">
+            <div class="result-title">Total Usable Hosts</div>
+            <div class="result-value" id="res-hosts">254</div>
+        </div>
+    </div>
+
+    <script>
+        // Initial State
+        let octets = [192, 168, 1, 10]; // Default IP
+        let cidr = 24;
+
+        const visualizer = document.getElementById('visualizer');
+        const cidrSlider = document.getElementById('cidrSlider');
+        const cidrText = document.getElementById('cidrText');
+
+        // Initialize
+        renderOctets();
+        calculateSubnet();
+
+        function updateFromControls() {
+            cidr = parseInt(cidrSlider.value);
+            cidrText.innerText = "/" + cidr;
+            renderOctets();
+            calculateSubnet();
+        }
+
+        function setIp(newOctets) {
+            octets = newOctets;
+            renderOctets();
+            calculateSubnet();
+        }
+
+        function toggleBit(octetIndex, bitIndex) {
+            // Bit value logic: 7-bitIndex (because array 0 is MSB 128)
+            const value = Math.pow(2, 7 - bitIndex);
+            
+            // Check if bit is currently on (using bitwise AND)
+            const currentVal = octets[octetIndex];
+            const isSet = (currentVal & value) !== 0;
+
+            if (isSet) {
+                octets[octetIndex] -= value; // Turn off
+            } else {
+                octets[octetIndex] += value; // Turn on
+            }
+
+            renderOctets();
+            calculateSubnet();
+        }
+
+        function renderOctets() {
+            visualizer.innerHTML = '';
+            let globalBitCounter = 0;
+
+            octets.forEach((val, oIndex) => {
+                
+                // Create Octet Container
+                const block = document.createElement('div');
+                block.className = 'octet-block';
+
+                // Label
+                const lbl = document.createElement('div');
+                lbl.className = 'octet-label';
+                lbl.innerText = `Octet ${oIndex + 1}`;
+                block.appendChild(lbl);
+
+                // Bits Row
+                const row = document.createElement('div');
+                row.className = 'bits-row';
+
+                // Generate 8 bits
+                for (let i = 0; i < 8; i++) {
+                    globalBitCounter++;
+                    const bitVal = Math.pow(2, 7 - i); // 128, 64, 32...
+                    const isSet = (val & bitVal) !== 0;
+                    
+                    const btn = document.createElement('button');
+                    btn.className = 'bit-btn';
+                    btn.innerText = isSet ? '1' : '0';
+                    
+                    // Color logic based on CIDR
+                    if (globalBitCounter <= cidr) {
+                        btn.classList.add('network');
+                        btn.title = `Network Bit (Value: ${bitVal})`;
+                    } else {
+                        btn.classList.add('host');
+                        btn.title = `Host Bit (Value: ${bitVal})`;
+                    }
+
+                    // Add value helper tooltip above bit
+                    if (oIndex === 0) { 
+                        // Only show helper numbers on first octet to reduce clutter? 
+                        // Or show on hover? Let's keep it simple.
+                    }
+                    
+                    btn.onclick = () => toggleBit(oIndex, i);
+                    row.appendChild(btn);
+                }
+                block.appendChild(row);
+
+                // Decimal Display
+                const dec = document.createElement('div');
+                dec.className = 'decimal-display';
+                dec.innerText = val;
+                block.appendChild(dec);
+
+                visualizer.appendChild(block);
+
+                // Add dot separator if not last
+                if(oIndex < 3) {
+                    const dot = document.createElement('div');
+                    dot.className = 'dot-separator';
+                    dot.innerText = '.';
+                    visualizer.appendChild(dot);
+                }
+            });
+        }
+
+        function toBinString(octetArr) {
+            return octetArr.map(num => num.toString(2).padStart(8, '0')).join('.');
+        }
+
+        function calculateSubnet() {
+            // 1. Create 32-bit integer from octets
+            // Note: Javascript bitwise operators treat numbers as 32-bit signed integers.
+            // Using unsigned right shift (>>> 0) helps handle the MSB correctly.
+            let ipLong = (octets[0] << 24) | (octets[1] << 16) | (octets[2] << 8) | octets[3];
+            ipLong = ipLong >>> 0;
+
+            // 2. Create Mask
+            // -1 is all 1s. Shift left by (32 - cidr) creates the mask.
+            let maskLong = -1 << (32 - cidr);
+            maskLong = maskLong >>> 0;
+
+            // 3. Calculate Network ID (IP AND Mask)
+            let netLong = (ipLong & maskLong) >>> 0;
+
+            // 4. Calculate Broadcast (Network ID OR Inverted Mask)
+            let broadcastLong = (netLong | (~maskLong)) >>> 0;
+
+            // 5. Helpers to convert back to dotted decimal
+            const longToIp = (long) => {
+                return [
+                    (long >>> 24) & 255,
+                    (long >>> 16) & 255,
+                    (long >>> 8) & 255,
+                    long & 255
+                ];
+            };
+
+            const netArr = longToIp(netLong);
+            const bcastArr = longToIp(broadcastLong);
+            const maskArr = longToIp(maskLong);
+
+            // 6. Total Hosts
+            // 2^(32-cidr) - 2
+            let hostBits = 32 - cidr;
+            let totalHosts = Math.pow(2, hostBits) - 2;
+            if(totalHosts < 0) totalHosts = 0; // For /31 and /32
+
+            // Update DOM
+            document.getElementById('res-net-id').innerText = netArr.join('.');
+            document.getElementById('res-net-bin').innerText = toBinString(netArr);
+            
+            document.getElementById('res-bcast').innerText = bcastArr.join('.');
+            document.getElementById('res-bcast-bin').innerText = toBinString(bcastArr);
+
+            document.getElementById('res-mask').innerText = maskArr.join('.');
+            document.getElementById('res-hosts').innerText = totalHosts.toLocaleString();
+        }
+    </script>
+</body>
+</html>

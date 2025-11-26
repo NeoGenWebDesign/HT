@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Routing Protocol Simulator</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Consolas', 'Courier New', monospace;
+            background: linear-gradient(180deg, #353636 50%, #032a36 75%);
+            min-height: 100vh;
+        }
+        a {
+            display: block;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            text-align: center;
+        }
+        .card {
+            background-color: white;
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+            padding: 1rem;
+            height: 100%;
+            align-items: center;
+            justify-content: center;
+        }
+        .console-output {
+            background-color: #1f2937; /* Dark console background */
+            color: #26e611; /* Light text */
+            font-family: 'Consolas', 'Courier New', monospace;
+            border-radius: 0.75rem;
+            padding: 0.5rem;
+            min-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            line-height: 1.5;
+            font-size: 0.7rem;
+        }
+        /* Console log coloring for clarity */
+        .log-step { color: #f6ad55; font-weight: bold; } /* Orange/Amber */
+        .log-update { color: #48bb78; } /* Green */
+        .log-error { color: #f56565; } /* Red */
+        .log-info { color: #a0aec0; }
+        .log-node { color: #63b3ed; font-weight: bold; } /* Blue */
+
+        /* Network Diagram Styling */
+        #network-diagram {
+            position: relative;
+            height: 250px;
+            width: 100%;
+        }
+        .node {
+            position: absolute;
+            width: 70px;
+            height: 70px;
+            background-color: #54c907; /* Indigo */
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            font-weight: bold;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .link-line {
+            position: absolute;
+            background-color: #d1b40f; /* Gray */
+            height: 3px;
+            transform-origin: 0 0;
+            transition: all 0.5s ease;
+        }
+        .link-cost {
+            position: absolute;
+            background-color: #fff;
+            padding: 2px 8px;
+            border-radius: 0.5rem;
+            font-weight: bold;
+            border: 1px solid #4a5568;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .link-line.active {
+            background-color: #48bb78; /* Green */
+            z-index: 10;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-10 min-h-screen">
+
+    <div class="max-w-7xl mx-auto">
+        <h1 class="text-4xl font-extrabold text-orange-500 mb-2 text-center">
+            Dynamic Routing Protocol Simulator
+        </h1>
+        <p class="text-lg text-white mb-8 text-center">
+            Simulating Distance Vector (Bellman-Ford) route discovery and re-convergence.
+        </p>
+        <p class="text-sm text-yellow-500 mb-8 text-center">
+            Press F5 or Reload/Refresh Browser to Reset Simulation.
+        </p>
+        <a id="link" class="text-sm hover:text-lime-500 text-yellow-200 mb-8 text-center" href="index.html">
+            Back to Simulations Index
+        </a>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+            
+            <!-- Explanation & Controls -->
+            <div class="lg:col-span-1">
+                <div class="card mb-6">
+                    <h3 class="text-2xl font-bold text-gray-800 mb-4">Distance Vector Routing</h3>
+                    <p class="text-gray-700 mb-4 text-sm">
+                        
+                        In Distance Vector (DV) protocols, routers only know two things about the path to a destination: the **Distance** (cost/metric) and the **Vector** (the next-hop router). They rely on their neighbors to tell them the best paths.
+                    </p>
+                    <ul class="list-disc list-inside text-sm text-gray-600 space-y-2 mb-4">
+                        <li>**Metric:** The cost is the path metric (lower is better).</li>
+                        <li>**Convergence:** The state where all routers agree on the best paths.</li>
+                        <li>**Re-convergence:** The process of adjusting routes when a link cost changes.</li>
+                    </ul>
+                    <hr class="my-4">
+                    <h3 class="text-xl font-bold text-gray-800 mb-4">Link Cost Control</h3>
+                    <label for="link-control" class="block text-sm font-medium text-gray-700 mb-2">Change Cost of Link A <-> C (Current: <span id="current-cost-ac">5</span>)</label>
+                    <input type="number" id="link-control" value="5" min="1" max="50"
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 mb-4 font-mono text-base">
+                    
+                    <button id="recalculate-btn" onclick="runSimulation(true)" 
+                            class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-150 mb-2">
+                        Update Cost & Recalculate Routes
+                    </button>
+                    <button onclick="runSimulation(false)" 
+                            class="w-full bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg shadow-md transition duration-150 text-sm">
+                        Run Initial Convergence
+                    </button>
+                </div>
+            </div>
+
+            <!-- Simulation and Table -->
+            <div class="lg:col-span-2 grid grid-rows-2 gap-8">
+                <!-- Network Diagram -->
+                <div class="card relative overflow-hidden">
+                    <h3 class="text-2xl font-bold text-gray-800 mb-4">Network Topology</h3>
+                    <div id="network-diagram">
+                        <!-- Nodes and links are drawn here by JS -->
+                    </div>
+                </div>
+
+                <!-- Console Output -->
+                <div class="card p-1    ">
+                    <h3 class="text-2xl font-bold text-gray-800 px-8 pt-4">Routing Protocol Log</h3>
+                    <div id="console" class="console-output">
+                        Simulator ready. Press "Run Initial Convergence" to start the route discovery.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Routing Table Display (Focus on Router A's perspective) -->
+        <div class="card mt-8">
+            <h3 class="text-2xl font-bold text-gray-800 mb-4">Router A's Routing Table (Final State)</h3>
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Destination</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cost / Metric</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Next Hop (Vector)</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Path Highlight</th>
+                    </tr>
+                </thead>
+                <tbody id="routing-table-body" class="bg-white divide-y divide-gray-200">
+                    <!-- Table rows injected here -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // --- Global State and Constants ---
+        const consoleOutput = document.getElementById('console');
+        const diagramContainer = document.getElementById('network-diagram');
+        const tableBody = document.getElementById('routing-table-body');
+        const currentCostAcSpan = document.getElementById('current-cost-ac');
+
+        const NODES = {
+            A: { x: 50, y: 50 },
+            B: { x: 250, y: 50 },
+            C: { x: 50, y: 250 },
+            D: { x: 250, y: 250 }
+        };
+
+        let graph = {
+            'A-B': { nodes: ['A', 'B'], cost: 2 },
+            'A-C': { nodes: ['A', 'C'], cost: 5 },
+            'B-D': { nodes: ['B', 'D'], cost: 3 },
+            'C-D': { nodes: ['C', 'D'], cost: 1 },
+        };
+        
+        let routingTableA = {}; // A's perspective
+        let pathHighlights = {}; // Stores the next hop for the visual path
+
+        /** Utility: Logs messages to the console with styling */
+        function log(message, type = 'log-info') {
+            consoleOutput.innerHTML += `<span class="${type}">${message}</span>\n`;
+            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+        }
+
+        /** Utility: Draws a line between two points */
+        function drawLink(id, x1, y1, x2, y2, cost) {
+            const dx = x2 - x1;
+            const dy = y2 - y1;
+            const length = Math.sqrt(dx * dx + dy * dy);
+            const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+
+            const link = document.createElement('div');
+            link.id = `link-${id}`;
+            link.className = 'link-line';
+            link.style.width = `${length}px`;
+            link.style.left = `${x1 + 35}px`; // Center offset
+            link.style.top = `${y1 + 35}px`; // Center offset
+            link.style.transform = `rotate(${angle}deg)`;
+            diagramContainer.appendChild(link);
+
+            const costLabel = document.createElement('div');
+            costLabel.id = `cost-${id}`;
+            costLabel.className = 'link-cost';
+            costLabel.textContent = cost;
+            costLabel.style.left = `${x1 + dx / 2 + 10}px`;
+            costLabel.style.top = `${y1 + dy / 2 + 10}px`;
+            diagramContainer.appendChild(costLabel);
+        }
+
+        /** Renders the network diagram (Nodes and Links) */
+        function renderNetwork() {
+            diagramContainer.innerHTML = '';
+
+            // Draw Links
+            for (const id in graph) {
+                const { nodes, cost } = graph[id];
+                const nodeA = NODES[nodes[0]];
+                const nodeB = NODES[nodes[1]];
+                drawLink(id, nodeA.x, nodeA.y, nodeB.x, nodeB.y, cost);
+            }
+
+            // Draw Nodes
+            for (const name in NODES) {
+                const { x, y } = NODES[name];
+                const node = document.createElement('div');
+                node.className = 'node';
+                node.style.left = `${x}px`;
+                node.style.top = `${y}px`;
+                node.textContent = name;
+                diagramContainer.appendChild(node);
+            }
+        }
+
+        /** Implements a simplified Distance Vector (Bellman-Ford) algorithm for Router A. */
+        function calculateRoutes() {
+            const startNode = 'A';
+            // Initial routing table for A
+            // Distance: 0 to self, Infinity to others
+            let distances = { 'A': 0 };
+            let nextHops = { 'A': 'Self' };
+            const nodes = Object.keys(NODES);
+            
+            nodes.forEach(node => {
+                if (node !== startNode) {
+                    distances[node] = Infinity;
+                    nextHops[node] = null;
+                }
+            });
+
+            // Initialize direct neighbors' distances
+            for (const id in graph) {
+                const { nodes: [n1, n2], cost } = graph[id];
+                if (n1 === startNode) {
+                    distances[n2] = cost;
+                    nextHops[n2] = n2;
+                } else if (n2 === startNode) {
+                    distances[n1] = cost;
+                    nextHops[n1] = n1;
+                }
+            }
+            
+            log(`\nRouter <span class="log-node">A</span> initial distance vector (Direct Neighbors):`, 'log-step');
+            log(JSON.stringify(distances));
+
+            // Run the main relaxation loop (simplified for fixed 4-node network)
+            let iteration = 0;
+            let updated;
+            
+            // Maximum iterations needed is nodes.length - 1
+            for (let i = 0; i < nodes.length - 1; i++) {
+                iteration++;
+                updated = false;
+                log(`\n--- Iteration ${iteration} (Exchange with Neighbors) ---`, 'log-step');
+                
+                // For a Distance Vector simulation, A asks its direct neighbors (B, C) for their tables.
+                const neighbors = nodes.filter(n => nextHops[n] === n && n !== startNode);
+                
+                // Mock neighbors' distance vectors (pre-calculated for simplicity in a simulator)
+                const neighborTables = {
+                    'B': { 'A': graph['A-B']?.cost || Infinity, 'C': 50, 'D': (graph['B-D']?.cost || Infinity) },
+                    'C': { 'A': graph['A-C']?.cost || Infinity, 'B': 50, 'D': (graph['C-D']?.cost || Infinity) },
+                };
+                
+                // Actual DV calculation (Relaxation step)
+                neighbors.forEach(neighbor => {
+                    const costToNeighbor = distances[neighbor];
+                    const neighborDV = neighborTables[neighbor] || {};
+                    
+                    for (const destination in neighborDV) {
+                        if (destination === startNode) continue;
+
+                        // New path cost: (Cost from A to Neighbor) + (Neighbor's Cost to Destination)
+                        const newPathCost = costToNeighbor + neighborDV[destination];
+                        
+                        log(`Router <span class="log-node">A</span> analyzes Neighbor <span class="log-node">${neighbor}</span>'s route to ${destination}:`, 'log-info');
+                        log(`  Current Best Cost to ${destination}: ${distances[destination]}`);
+                        log(`  Path via ${neighbor}: ${costToNeighbor} (A->${neighbor}) + ${neighborDV[destination]} (${neighbor}->${destination}) = ${newPathCost}`);
+
+                        if (newPathCost < distances[destination]) {
+                            distances[destination] = newPathCost;
+                            nextHops[destination] = neighbor;
+                            updated = true;
+                            log(`  <span class="log-update">UPDATE: New best path found via ${neighbor} with cost ${newPathCost}.</span>`, 'log-update');
+                        } else {
+                            log(`  No update needed. Current path is shorter or equal.`, 'log-info');
+                        }
+                    }
+                });
+
+                if (!updated) {
+                    log(`No updates occurred in Iteration ${iteration}. Network has converged.`, 'log-step');
+                    break;
+                }
+            }
+
+            // Store the final routing table and paths for display
+            routingTableA = {};
+            pathHighlights = {};
+            nodes.forEach(node => {
+                if (node !== startNode) {
+                    routingTableA[node] = {
+                        cost: distances[node],
+                        nextHop: nextHops[node]
+                    };
+                    // Highlight the next hop link for visualization
+                    if (nextHops[node] && nextHops[node] !== 'Self') {
+                        pathHighlights[node] = nextHops[node];
+                    }
+                }
+            });
+        }
+
+        /** Renders the final state of Router A's routing table */
+        function renderRoutingTable() {
+            tableBody.innerHTML = '';
+            
+            for (const dest in routingTableA) {
+                const { cost, nextHop } = routingTableA[dest];
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-indigo-50 transition duration-150';
+                
+                const pathText = pathHighlights[dest] ? `A &rarr; ${pathHighlights[dest]}` : 'Direct';
+
+                row.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${dest}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700 font-bold">${cost}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700 font-mono">${nextHop}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${pathText}</td>
+                `;
+                tableBody.appendChild(row);
+            }
+        }
+
+        /** Highlights the links belonging to the currently chosen shortest path */
+        function highlightPaths() {
+            // Remove previous highlights
+            document.querySelectorAll('.link-line').forEach(el => el.classList.remove('active'));
+
+            for (const dest in pathHighlights) {
+                const nextHop = pathHighlights[dest];
+                
+                // Highlight the first link in the shortest path (A -> NextHop)
+                const linkId1 = nextHop > 'A' ? `A-${nextHop}` : `${nextHop}-A`; // Canonical ID (A-B or A-C)
+                const linkId2 = `${nextHop}-A`; // Check reverse as well
+
+                const linkEl = document.getElementById(`link-${linkId1}`) || document.getElementById(`link-${linkId2}`);
+                if (linkEl) {
+                    linkEl.classList.add('active');
+                }
+            }
+        }
+
+        /** Main simulation control function */
+        function runSimulation(isRecalculation) {
+            
+            if (isRecalculation) {
+                const newCost = parseInt(document.getElementById('link-control').value);
+                const oldCost = graph['A-C'].cost;
+                graph['A-C'].cost = newCost;
+                document.getElementById('cost-A-C').textContent = newCost;
+                currentCostAcSpan.textContent = newCost;
+                
+                log(`\n\n======================================================`, 'log-step');
+                log(`RE-CONVERGENCE EVENT: Link A <-> C cost changed from ${oldCost} to ${newCost}.`, 'log-step');
+                log(`======================================================`, 'log-step');
+            } else {
+                // Initial run
+                log(`\n\n======================================================`, 'log-step');
+                log(`INITIAL CONVERGENCE: Router A building its first routing table.`, 'log-step');
+                log(`======================================================`, 'log-step');
+            }
+            
+            // Step 1: Calculate routes using the current graph
+            calculateRoutes();
+            
+            // Step 2: Render results
+            renderRoutingTable();
+            highlightPaths();
+            
+            log(`\nFINAL ROUTING TABLE FOR A CONVERGED.`, 'log-success');
+        }
+
+        // Initialize on load
+        document.addEventListener('DOMContentLoaded', () => {
+            renderNetwork();
+            // runSimulation(false); // Can be uncommented to auto-start
+        });
+
+    </script>
+</body>
+</html>

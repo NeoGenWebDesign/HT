@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DNS Record Type Explorer</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Consolas', 'Courier New', monospace;
+            background: linear-gradient(180deg, #353636 50%, #032a36 75%);
+            min-height: 100vh;
+        }
+        a {
+            display: block;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            text-align: center;
+        }
+        .container-card {
+            background-color: white;
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+            padding: 2rem;
+            transition: all 0.3s ease;
+            border-left: 4px solid;
+        }
+        .output-box {
+            background-color: #1f2937; /* Gray 800 */
+            color: #f3f4f6; /* Gray 100 */
+            font-family: 'Consolas', 'Courier New', monospace;
+            border-radius: 0.75rem;
+            padding: 1rem;
+            min-height: 200px;
+        }
+        .output-heading { color: #38bdf8; /* Sky 400 */ font-weight: bold; }
+        .output-key { color: #facc15; /* Yellow 500 */ }
+        .output-value { color: #10b981; /* Emerald 500 */ }
+        .output-text { color: #e5e7eb; /* Gray 200 */ }
+        
+        .record-explanation {
+            border-left: 3px solid;
+            padding-left: 1rem;
+            margin-bottom: 1rem;
+            max-height: 150px;
+        }
+        .A { border-color: #ef4444; /* Red */ }
+        .CNAME { border-color: #f97316; /* Orange */ }
+        .MX { border-color: #a70c6b; /* Blue */ }
+        .TXT { border-color: #10b981; /* Green */ }
+
+        .record-heading {
+            font-weight: bold;
+            font-size: 1.25rem;
+            margin-bottom: 0.5rem;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-10 min-h-screen">
+
+    <div class="max-w-6xl mx-auto">
+        <h1 class="text-4xl font-extrabold text-orange-500 mb-2 text-center">
+            DNS Record Type Explorer
+        </h1>
+        <p class="text-lg text-white mb-8 text-center">
+            Simulate lookups for different DNS records (A, CNAME, MX, TXT) and understand their specific uses.
+        </p>
+        <p class="text-sm text-yellow-500 mb-8 text-center">
+            Press F5 or Reload/Refresh Browser to Reset Simulation.
+        </p>
+        <a id="link" class="text-sm hover:text-lime-500 text-yellow-200 mb-8 text-center" href="index.html">
+            Back to Simulations Index
+        </a>
+
+        <!-- Input and Control Panel -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            
+            <!-- DNS Lookup Panel -->
+            <div class="lg:col-span-1 container-card border-emerald-500">
+                <h3 class="text-2xl font-bold text-gray-800 mb-4">Lookup Domain</h3>
+
+                <label for="lookupDomain" class="block text-sm font-medium text-gray-700 mb-2">
+                    Enter Domain (e.g., example.com, www.example.org)
+                </label>
+                <input type="text" id="lookupDomain" value="example.com" 
+                       class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 mb-4 font-mono text-lg">
+
+                <label for="recordType" class="block text-sm font-medium text-gray-700 mb-2">
+                    Select Record Type
+                </label>
+                <select id="recordType" 
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 mb-6 font-mono text-lg">
+                    <option value="A">A (Address)</option>
+                    <option value="CNAME">CNAME (Canonical Name)</option>
+                    <option value="MX">MX (Mail Exchange)</option>
+                    <option value="TXT">TXT (Text)</option>
+                </select>
+                
+                <button id="lookup-btn" onclick="performLookup()" 
+                        class="w-full bg-emerald-600 hover:bg-emerald-800 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-150">
+                    Perform DNS Lookup
+                </button>
+            </div>
+            
+            <!-- Output Log -->
+            <div class="lg:col-span-2 container-card border-blue-500">
+                <h3 class="text-2xl font-bold text-gray-800 mb-4">DNS Response</h3>
+                <div id="output" class="output-box">
+                    <p class="output-text">Select a domain and a record type, then click 'Perform DNS Lookup'.</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Explanation Panel -->
+        <div class="container-card border-red-500 mt-6">
+            <h3 class="text-2xl font-bold text-gray-800 mb-0">Understanding DNS Record Types</h3>
+            <div id="explanations" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                <!-- A Record -->
+                <div class="record-explanation A">
+                    <p class="record-heading text-red-600">A Record (Address)</p>
+                    <p class="text-gray-700">The most fundamental record. It maps a domain name directly to an IPv4 address. When you type a domain into a browser, an A record is primarily what is being sought.</p>
+                    <p class="text-sm text-gray-500 mt-2">Example: <code>example.com</code> maps to <code>93.184.216.34</code>.</p>
+                </div>
+
+                <!-- CNAME Record -->
+                <div class="record-explanation CNAME">
+                    <p class="record-heading text-orange-600">CNAME Record (Canonical Name)</p>
+                    <p class="text-gray-700">Used for aliases. It maps one domain name (the alias) to another domain name (the canonical name). The DNS resolver must perform a second lookup on the canonical name to get the final IP address.</p>
+                    <p class="text-sm text-gray-500 mt-2">Example: <code>www.example.com</code> maps to <code>example.com</code>.</p>
+                </div>
+
+                <!-- MX Record -->
+                <div class="record-explanation MX">
+                    <p class="record-heading text-blue-600">MX Record (Mail Exchange)</p>
+                    <p class="text-gray-700">Specifies the mail server(s) responsible for accepting email messages on behalf of a recipient's domain. They include a **preference value** (lower is preferred) to indicate priority if multiple servers exist.</p>
+                    <p class="text-sm text-gray-500 mt-2">Example: <code>example.com</code> maps to <code>mail.google.com</code> (Pref: 10).</p>
+                    
+                </div>
+
+                <!-- TXT Record -->
+                <div class="record-explanation TXT">
+                    <p class="record-heading text-green-600">TXT Record (Text)</p>
+                    <p class="text-gray-700">Allows domain administrators to store arbitrary text data. They are commonly used for security purposes like **SPF** (Sender Policy Framework) and **DKIM** (DomainKeys Identified Mail) to prevent email spoofing, or for domain verification.</p>
+                    <p class="text-sm text-fuchsia-500 mt-2">Example: <code>v=spf1 include:_spf.google.com ~all</code>.</p>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Simulated DNS Zone Data (Authoritative) ---
+        const ZONES = {
+            'example.com': {
+                A: [{ host: '@', value: '93.184.216.34', ttl: 3600 }],
+                CNAME: [{ host: 'www', value: 'example.com', ttl: 3600 }],
+                MX: [
+                    { host: '@', value: 'mail.server-a.com', preference: 10, ttl: 3600 },
+                    { host: '@', value: 'mail.server-b.com', preference: 20, ttl: 3600 }
+                ],
+                TXT: [{ host: '@', value: '"v=spf1 include:spf.auth-service.net ~all"', ttl: 7200 }]
+            },
+            'example.org': {
+                A: [{ host: '@', value: '192.0.2.10', ttl: 86400 }],
+                CNAME: [{ host: 'blog', value: 'pages.blog-cdn.org', ttl: 300 }],
+                TXT: [{ host: '_dmarc', value: '"v=DMARC1; p=reject; rua=mailto:dmarc@example.org"', ttl: 3600 }]
+            },
+            // The Canonical Target must also have an A record somewhere
+            'pages.blog-cdn.org': {
+                A: [{ host: '@', value: '203.0.113.50', ttl: 300 }]
+            }
+        };
+
+        // --- DOM References ---
+        const outputElement = document.getElementById('output');
+        const lookupDomainInput = document.getElementById('lookupDomain');
+        const recordTypeSelect = document.getElementById('recordType');
+
+        /** Finds the relevant zone data and extracts the record. */
+        function getRecord(fqdn, recordType) {
+            let parts = fqdn.split('.');
+            let domain = parts.slice(-2).join('.'); // Extracts 'example.com' or 'example.org'
+            let subdomain = parts.length > 2 ? parts.slice(0, -2).join('.') : ''; // Extracts 'www', 'blog', or '' for root
+
+            if (!ZONES[domain]) {
+                return { error: `Domain ${domain} not found in simulated zones.` };
+            }
+
+            const zone = ZONES[domain];
+            const records = zone[recordType];
+            
+            if (!records) {
+                return { error: `No ${recordType} records found for ${domain}.` };
+            }
+
+            // Find the record matching the host/subdomain
+            const hostLookup = subdomain || '@';
+            const foundRecord = records.find(r => r.host === hostLookup);
+
+            if (foundRecord) {
+                return { domain: domain, host: hostLookup, record: foundRecord, type: recordType };
+            } else if (subdomain && recordType === 'A') {
+                // If A record not found for subdomain, fall back to root A record (a common configuration)
+                 const rootARecord = zone['A'].find(r => r.host === '@');
+                 if (rootARecord) {
+                    return { domain: domain, host: '@', record: rootARecord, type: recordType, fallback: true };
+                 }
+            }
+
+
+            return { error: `Record for ${fqdn} (Host: ${hostLookup}, Type: ${recordType}) not explicitly defined.` };
+        }
+
+        /** Formats the DNS response output. */
+        function formatOutput(recordData) {
+            let output = '';
+            
+            output += `<p class="output-heading">;; QUESTION SECTION:</p>`;
+            output += `<p class="output-text">${recordData.domain}.\t\tIN\t${recordData.type}</p>`;
+            output += `<p class="output-text"></p>`;
+            
+            output += `<p class="output-heading">;; ANSWER SECTION:</p>`;
+
+            if (recordData.type === 'A') {
+                output += `<p class="output-text">`;
+                output += `<span class="output-key">${recordData.domain}.\t</span>`;
+                output += `<span class="output-text">${recordData.record.ttl}\tIN\tA\t</span>`;
+                output += `<span class="output-value">${recordData.record.value}</span>`;
+                output += `</p>`;
+            } 
+            else if (recordData.type === 'CNAME') {
+                const canonicalName = recordData.record.value;
+                output += `<p class="output-text">`;
+                output += `<span class="output-key">${recordData.host}.${recordData.domain}.\t</span>`;
+                output += `<span class="output-text">${recordData.record.ttl}\tIN\tCNAME\t</span>`;
+                output += `<span class="output-value">${canonicalName}.</span>`;
+                output += `</p>`;
+
+                // Simulate the CNAME follow-up lookup (recursive step)
+                const targetRecord = getRecord(canonicalName, 'A');
+                if (targetRecord.record) {
+                    output += `<p class="output-heading mt-4">;; CNAME FOLLOW-UP (Recursive Query):</p>`;
+                    output += `<p class="output-text">`;
+                    output += `<span class="output-key">${canonicalName}.\t</span>`;
+                    output += `<span class="output-text">${targetRecord.record.ttl}\tIN\tA\t</span>`;
+                    output += `<span class="output-value">${targetRecord.record.value}</span>`;
+                    output += `</p>`;
+                }
+            } 
+            else if (recordData.type === 'MX') {
+                // MX records usually return multiple entries
+                const mxRecords = ZONES[recordData.domain].MX.sort((a, b) => a.preference - b.preference);
+
+                mxRecords.forEach(mx => {
+                    output += `<p class="output-text">`;
+                    output += `<span class="output-key">${recordData.domain}.\t</span>`;
+                    output += `<span class="output-text">${mx.ttl}\tIN\tMX\t</span>`;
+                    output += `<span class="output-key">${mx.preference}\t</span>`;
+                    output += `<span class="output-value">${mx.value}.</span>`;
+                    output += `</p>`;
+                });
+            }
+            else if (recordData.type === 'TXT') {
+                output += `<p class="output-text">`;
+                output += `<span class="output-key">${recordData.domain}.\t</span>`;
+                output += `<span class="output-text">${recordData.record.ttl}\tIN\tTXT\t</span>`;
+                output += `<span class="output-value">${recordData.record.value}</span>`;
+                output += `</p>`;
+            }
+            
+            output += `<p class="output-heading mt-4">;; RECORD TYPE SUMMARY:</p>`;
+            if (recordData.type === 'A') {
+                output += `<p class="output-text">This maps the name directly to an IPv4 address. The primary function of DNS.</p>`;
+            } else if (recordData.type === 'CNAME') {
+                output += `<p class="output-text">This result is an **alias**. The resolver must perform a second lookup (as shown above) to find the final IP address.</p>`;
+            } else if (recordData.type === 'MX') {
+                output += `<p class="output-text">This lists the mail servers. The **Preference** value dictates which server to try first (lower number = higher priority).</p>`;
+            } else if (recordData.type === 'TXT') {
+                output += `<p class="output-text">This is arbitrary text data, often used for **security verification** (e.g., SPF, DMARC).</p>`;
+            }
+
+
+            return output;
+        }
+
+        /** Main function triggered by button click. */
+        async function performLookup() {
+            const fqdn = lookupDomainInput.value.trim().toLowerCase();
+            const recordType = recordTypeSelect.value;
+            
+            outputElement.innerHTML = `<p class="output-text">Looking up ${fqdn} for type ${recordType}...</p>`;
+            await new Promise(resolve => setTimeout(resolve, 800)); // Simulate network delay
+
+            const recordData = getRecord(fqdn, recordType);
+
+            if (recordData.error) {
+                outputElement.innerHTML = `<p class="output-heading text-red-500">Error:</p><p class="output-text">${recordData.error}</p>`;
+            } else {
+                outputElement.innerHTML = formatOutput(recordData);
+            }
+        }
+
+        // Set initial example for CNAME
+        window.onload = function() {
+            lookupDomainInput.value = 'www.example.com';
+            recordTypeSelect.value = 'CNAME';
+        };
+
+    </script>
+</body>
+</html>

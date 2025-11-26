@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ARP Resolution Simulator</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Consolas', 'Courier New', monospace;
+            background: linear-gradient(180deg, #353636 50%, #032a36 75%);
+            min-height: 100vh;
+        }
+        a {
+            display: block;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            text-align: center;
+        }
+        .container-card {
+            background-color: white;
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+            padding: 2rem;
+            border-left: 5px solid;
+            transition: all 0.3s ease;
+        }
+        .log-container {
+            height: 350px;
+            overflow-y: auto;
+            background-color: #1f2937; /* Gray 800 */
+            color: #d1d5db; /* Gray 300 */
+            font-family: 'Consolas', 'Courier New', monospace;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            font-size: 0.9rem;
+        }
+        .log-broadcast { color: #f97316; font-weight: bold; } /* Orange */
+        .log-unicast { color: #22c55e; font-weight: bold; } /* Green */
+        .log-cache { color: #3b82f6; } /* Blue */
+        .log-info { color: #9ca3af; } /* Gray 400 */
+        .device-info {
+            background-color: #e0f2fe;
+            border: 1px solid #7dd3fc;
+        }
+        .mac-addr {
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-weight: bold;
+            color: #fa0202; /* Red 700 */
+        }
+    </style>
+</head>
+<body class="p-4 md:p-10 min-h-screen">
+
+    <div class="max-w-7xl mx-auto">
+        <h1 class="text-4xl font-extrabold text-orange-500 mb-2 text-center">
+            ARP Protocol Simulation
+        </h1>
+        <p class="text-lg text-white mb-8 text-center">
+            Simulating Host A attempting to communicate with Host B on a Local Area Network (LAN)
+        </p>
+        <p class="text-sm text-yellow-500 mb-8 text-center">
+            Press F5 or Reload/Refresh Browser to Reset Simulation.
+        </p>
+        <a id="link" class="text-sm hover:text-lime-500 text-yellow-200 mb-8 text-center" href="index.html">
+            Back to Simulations Index
+        </a>
+
+        <!-- Diagram Trigger -->
+        
+
+        <!-- Network Configuration -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div id="host-a-card" class="container-card border-purple-600">
+                <h3 class="text-xl font-bold text-purple-800 mb-3">Host A (Initiator)</h3>
+                <p class="text-base text-gray-700"><strong>IP Address:</strong> <span class="font-mono text-blue-700">192.168.1.10</span></p>
+                <p class="text-base text-gray-700"><strong>MAC Address:</strong> <span class="mac-addr">AA:AA:AA:AA:AA:AA</span></p>
+            </div>
+            <div class="container-card border-gray-400">
+                <h3 class="text-xl font-bold text-gray-700 mb-3">Switch (Layer 2)</h3>
+                <p class="text-base text-gray-700">The switch forwards the ARP broadcast to all ports.</p>
+                <p class="text-base text-gray-700">It learns MAC addresses by inspecting frames.</p>
+            </div>
+            <div id="host-b-card" class="container-card border-lime-600">
+                <h3 class="text-xl font-bold text-lime-800 mb-3">Host B (Target)</h3>
+                <p class="text-base text-gray-700"><strong>IP Address:</strong> <span class="font-mono text-green-700">192.168.1.20</span></p>
+                <p class="text-base text-gray-700"><strong>MAC Address:</strong> <span class="mac-addr">BB:BB:BB:BB:BB:BB</span></p>
+            </div>
+        </div>
+
+        <!-- Simulation Control and Log -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="container-card border-orange-600">
+                <h3 class="text-xl font-bold text-orange-800 mb-4">ARP Cache (Host A)</h3>
+                <div class="rounded-lg overflow-hidden border border-gray-300">
+                    <table class="w-full text-left text-sm">
+                        <thead>
+                            <tr class="bg-pink-700 text-white">
+                                <th class="p-3">IP Address</th>
+                                <th class="p-3">MAC Address</th>
+                                <th class="p-3">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="arp-cache-body" class="bg-white text-gray-700">
+                            <tr><td colspan="3" class="p-4 text-center text-gray-500">Cache is initially empty.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <button id="start-btn" onclick="startArpProcess()" class="mt-6 w-full bg-pink-400 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-150">
+                    Simulate ARP Request (Host A needs Host B's MAC)
+                </button>
+                <button id="reset-btn" onclick="resetSimulation()" class="mt-4 w-full bg-red-500 hover:bg-red-800 text-white font-bold py-2 px-6 rounded-lg shadow-md transition duration-150 hidden">
+                    Reset Cache & Simulation
+                </button>
+            </div>
+
+            <div class="container-card border-gray-700">
+                <h3 class="text-xl font-bold text-gray-800 mb-4">Simulation Log</h3>
+                <div id="log" class="log-container">
+                    <p class="log-info">System: Click the button to start Host A trying to communicate with Host B (192.168.1.20).</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Configuration Constants ---
+        const HOST_A = { ip: '192.168.1.10', mac: 'AA:AA:AA:AA:AA:AA', name: 'Host A' };
+        const HOST_B = { ip: '192.168.1.20', mac: 'BB:BB:BB:BB:BB:BB', name: 'Host B' };
+        const BROADCAST_MAC = 'FF:FF:FF:FF:FF:FF';
+
+        // --- State Variables ---
+        // { ip: string, mac: string, status: string }
+        let hostA_arpCache = []; 
+        let simulationRunning = false;
+
+        // --- DOM References ---
+        const log = document.getElementById('log');
+        const arpCacheBody = document.getElementById('arp-cache-body');
+        const startBtn = document.getElementById('start-btn');
+        const resetBtn = document.getElementById('reset-btn');
+
+        // --- Utility Functions ---
+
+        /** Logs a message to the simulation console with appropriate styling. */
+        function logMessage(text, className = 'log-info') {
+            const entry = document.createElement('p');
+            entry.className = className;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${text}`;
+            log.appendChild(entry);
+            log.scrollTop = log.scrollHeight;
+        }
+
+        /** Renders the current state of the ARP cache to the DOM. */
+        function renderArpCache() {
+            if (hostA_arpCache.length === 0) {
+                arpCacheBody.innerHTML = '<tr><td colspan="3" class="p-4 text-center text-gray-500">Cache is currently empty.</td></tr>';
+                return;
+            }
+
+            arpCacheBody.innerHTML = hostA_arpCache.map(entry => `
+                <tr class="hover:bg-gray-50">
+                    <td class="p-3 font-mono">${entry.ip}</td>
+                    <td class="p-3 mac-addr">${entry.mac}</td>
+                    <td class="p-3 text-${entry.status === 'Resolved' ? 'green' : 'gray'}-600 font-semibold">${entry.status}</td>
+                </tr>
+            `).join('');
+        }
+        
+        /** Delays execution to make the simulation readable. */
+        const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+        // --- Core Simulation Logic ---
+
+        async function startArpProcess() {
+            if (simulationRunning) return;
+            simulationRunning = true;
+            startBtn.disabled = true;
+            
+            logMessage(`\n--- START: ${HOST_A.name} attempts to communicate with ${HOST_B.name} (${HOST_B.ip}) ---`, 'text-lg font-bold text-white bg-indigo-500 p-1 rounded');
+            
+            // 1. Host A checks its cache
+            await delay(1000);
+            const cachedEntry = hostA_arpCache.find(e => e.ip === HOST_B.ip);
+
+            if (cachedEntry) {
+                logMessage(`(1) ${HOST_A.name} (192.168.1.10) checks its ARP Cache.`, 'log-info');
+                logMessage(`Cache Hit! MAC address ${cachedEntry.mac} is already known.`, 'log-cache');
+                logMessage(`Communication (e.g., Ping) proceeds immediately using the cached MAC.`, 'log-unicast');
+                simulationRunning = false;
+                startBtn.disabled = false;
+                return;
+            } else {
+                logMessage(`(1) ${HOST_A.name} (192.168.1.10) checks its ARP Cache.`, 'log-info');
+                logMessage(`Cache Miss! MAC address for ${HOST_B.ip} is unknown. Initiating ARP Request.`, 'log-cache');
+                
+                // Add pending entry to cache
+                hostA_arpCache = [{ ip: HOST_B.ip, mac: 'Incomplete', status: 'Pending' }];
+                renderArpCache();
+            }
+
+            // 2. Host A sends an ARP Request (Broadcast)
+            await delay(1500);
+            logMessage(`(2) ARP REQUEST (Broadcast)`, 'text-xl log-broadcast');
+            logMessage(`Frame Headers: Src MAC=${HOST_A.mac} -> Dst MAC=${BROADCAST_MAC} (All Hosts)`);
+            logMessage(`ARP Message: "Who has IP ${HOST_B.ip}? Tell ${HOST_A.ip}."`);
+
+            // 3. Switch/Network Floods the Broadcast
+            await delay(1500);
+            logMessage(`(3) The Switch floods the ARP Request to all ports.`, 'log-info');
+
+            // 4. Host B receives and processes the request
+            await delay(1500);
+            logMessage(`(4) ${HOST_B.name} receives the broadcast and checks the IP: Matches its own IP (${HOST_B.ip})!`, 'log-unicast');
+            logMessage(`Note: ${HOST_B.name} also learns ${HOST_A.ip}'s MAC (${HOST_A.mac}) and updates its own cache (not shown).`, 'log-info');
+            
+            // 5. Host B sends an ARP Reply (Unicast)
+            await delay(1500);
+            logMessage(`(5) ARP REPLY (Unicast)`, 'text-xl log-unicast');
+            logMessage(`Frame Headers: Src MAC=${HOST_B.mac} -> Dst MAC=${HOST_A.mac} (Specific Host A)`);
+            logMessage(`ARP Message: "I am ${HOST_B.ip}, and my MAC is ${HOST_B.mac}."`);
+            
+            // 6. Host A receives and updates its cache
+            await delay(1500);
+            logMessage(`(6) ${HOST_A.name} receives the Unicast Reply.`, 'log-cache');
+            logMessage(`Cache Updated! Mapping IP ${HOST_B.ip} to MAC ${HOST_B.mac}.`, 'log-cache');
+            
+            // Update cache entry
+            hostA_arpCache = [{ ip: HOST_B.ip, mac: HOST_B.mac, status: 'Resolved' }];
+            renderArpCache();
+
+            // 7. Communication now proceeds
+            await delay(1000);
+            logMessage(`(7) Communication (e.g., Ping/Data) can now proceed using the new cache entry.`, 'log-unicast');
+
+            simulationRunning = false;
+            startBtn.classList.add('hidden');
+            resetBtn.classList.remove('hidden');
+        }
+
+        function resetSimulation() {
+            hostA_arpCache = [];
+            renderArpCache();
+            log.innerHTML = '<p class="log-info">System: Click the button to start Host A trying to communicate with Host B (192.168.1.20).</p>';
+            
+            startBtn.classList.remove('hidden');
+            resetBtn.classList.add('hidden');
+            startBtn.disabled = false;
+        }
+
+        // Initialize on load
+        window.onload = function() {
+            renderArpCache(); 
+        };
+    </script>
+</body>
+</html>

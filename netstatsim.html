@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Netstat Command Execution Simulator</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Consolas', 'Courier New', monospace;
+            background: linear-gradient(180deg, #353636 50%, #032a36 75%);
+            min-height: 100vh;
+        }
+        a {
+            display: block;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            text-align: center;
+        }
+        .container-card {
+            background-color: white;
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+            padding: 2rem;
+            border-bottom: 5px solid;
+            transition: all 0.3s ease;
+        }
+        .terminal {
+            background-color: #0f172a; /* Slate 900 */
+            color: #10b981; /* Emerald 500 */
+            font-family: 'Consolas', 'Courier New', monospace;
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            min-height: 100px;
+        }
+        .log-container {
+            height: 400px;
+            overflow-y: auto;
+            background-color: #1e293b; /* Slate 800 */
+            color: #e2e8f0; /* Slate 200 */
+            font-family: 'Consolas', 'Courier New', monospace;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            font-size: 0.85rem;
+            line-height: 1.4;
+        }
+        .log-stage { color: #3b82f6; font-weight: bold; } /* Blue */
+        .log-data { color: #facc15; font-weight: bold; } /* Yellow */
+        .log-info { color: #94a3b8; } /* Slate 400 */
+        .log-result { color: #a7f3d0; } /* Teal */
+        
+        .output-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+            font-size: 0.8rem;
+        }
+        .output-table th, .output-table td {
+            border: 1px solid #334155; /* Slate 700 */
+            padding: 0.5rem;
+            text-align: left;
+        }
+        .output-table th {
+            background-color: #334155;
+            color: white;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-10 min-h-screen">
+
+    <div class="max-w-6xl mx-auto">
+        <h1 class="text-4xl font-extrabold text-orange-500 mb-2 text-center">
+            Netstat Command Simulation
+        </h1>
+        <p class="text-lg text-white mb-8 text-center">
+            Tracing how the Operating System accesses the network kernel tables to show active connections and listening ports.
+        </p>
+        <p class="text-sm text-yellow-500 mb-8 text-center">
+            Press F5 or Reload/Refresh Browser to Reset Simulation.
+        </p>
+        <a id="link" class="text-sm hover:text-lime-500 text-yellow-200 mb-8 text-center" href="index.html">
+            Back to Simulations Index
+        </a>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            <!-- Terminal and Control -->
+            <div class="container-card border-indigo-600">
+                <h3 class="text-2xl font-bold text-indigo-800 mb-4">Command Execution</h3>
+                <div id="terminal-input" class="terminal">
+                    $ <span class="text-white">netstat -ant</span>
+                </div>
+                
+                <p class="mt-4 text-gray-600 italic">
+                    <span class="font-bold">-a:</span> Show all connections and listening ports. <br>
+                    <span class="font-bold">-n:</span> Show numerical addresses (don't resolve names). <br>
+                    <span class="font-bold">-t:</span> Show TCP connections.
+                </p>
+
+                <button id="start-btn" onclick="startNetstatProcess()" class="mt-6 w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-150">
+                    Run Netstat
+                </button>
+                <button id="reset-btn" onclick="resetSimulation()" class="mt-4 w-full bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-6 rounded-lg shadow-md transition duration-150 hidden">
+                    Reset
+                </button>
+            </div>
+
+            <!-- Simulation Log -->
+            <div class="container-card border-gray-700">
+                <h3 class="text-2xl font-bold text-gray-800 mb-4">System Log (Kernel Interaction)</h3>
+                <div id="log" class="log-container">
+                    <p class="log-info">System: Ready. Click 'Run Netstat' to see the process unfold.</p>
+                </div>
+            </div>
+        </div>
+        
+    </div>
+
+    <script>
+        // --- Simulated Network Data (Protocol Control Blocks - PCBs) ---
+        // This is the data the OS kernel keeps track of in memory.
+        const simulatedPCBs = [
+            { proto: 'tcp', local: '0.0.0.0:22', foreign: '0.0.0.0:*', state: 'LISTEN', program: 'sshd' },
+            { proto: 'tcp', local: '0.0.0.0:80', foreign: '0.0.0.0:*', state: 'LISTEN', program: 'httpd' },
+            { proto: 'tcp', local: '127.0.0.1:3306', foreign: '0.0.0.0:*', state: 'LISTEN', program: 'mysqld' },
+            { proto: 'tcp', local: '192.168.1.10:443', foreign: '203.0.113.5:54321', state: 'ESTABLISHED', program: 'nginx' },
+            { proto: 'tcp', local: '192.168.1.10:55123', foreign: '142.250.66.1:443', state: 'ESTABLISHED', program: 'chrome' },
+            { proto: 'tcp', local: '192.168.1.10:55124', foreign: '142.250.66.1:443', state: 'FIN_WAIT2', program: 'chrome' },
+            { proto: 'tcp', local: '192.168.1.10:55125', foreign: '142.250.66.1:80', state: 'TIME_WAIT', program: 'chrome' },
+            { proto: 'udp', local: '0.0.0.0:53', foreign: '0.0.0.0:*', state: '', program: 'dnsmasq' } // UDP connection (will be filtered by -t)
+        ];
+
+        // --- State Variables and DOM References ---
+        let isRunning = false;
+        const log = document.getElementById('log');
+        const startBtn = document.getElementById('start-btn');
+        const resetBtn = document.getElementById('reset-btn');
+
+        // --- Utility Functions ---
+
+        /** Logs a message to the simulation console with appropriate styling. */
+        function logMessage(text, className = 'log-info') {
+            const entry = document.createElement('p');
+            entry.className = className + ' mb-1';
+            entry.textContent = text;
+            log.appendChild(entry);
+            log.scrollTop = log.scrollHeight;
+        }
+
+        /** Delays execution to simulate time passage. */
+        const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+        // --- Core Simulation Logic ---
+
+        async function startNetstatProcess() {
+            if (isRunning) return;
+            isRunning = true;
+            startBtn.disabled = true;
+            resetBtn.classList.add('hidden');
+            log.innerHTML = '';
+
+            logMessage(`\n--- STEP 1: COMMAND PARSING AND KERNEL REQUEST ---`, 'text-lg log-stage');
+            await delay(1000);
+            logMessage(`(1.1) The 'netstat' utility parses the flags: -a (all), -n (numerical), -t (tcp).`);
+            logMessage(`(1.2) It sends a request to the Operating System Kernel (via system calls, e.g., /proc/net/tcp on Linux).`, 'log-info');
+            logMessage(`(1.3) The kernel prepares to access the network's internal data structures.`, 'log-info');
+
+            logMessage(`\n--- STEP 2: ACCESSING PROTOCOL CONTROL BLOCKS (PCBs) ---`, 'text-lg log-stage');
+            await delay(1500);
+            logMessage(`(2.1) The kernel reads the list of active Protocol Control Blocks (PCBs) stored in memory.`, 'log-info');
+            
+            // Simulating PCB reading
+            const readPCBs = [];
+            for (let i = 0; i < simulatedPCBs.length; i++) {
+                await delay(300);
+                const pcb = simulatedPCBs[i];
+                const type = pcb.state === 'LISTEN' ? 'Listening Socket' : 'Active Connection';
+                logMessage(`[READ] ${type} found: Local ${pcb.local}, State: ${pcb.state}`, 'log-data');
+                readPCBs.push(pcb);
+            }
+            
+            logMessage(`(2.2) ${readPCBs.length} total entries retrieved from the kernel's memory tables.`, 'log-success');
+            
+            logMessage(`\n--- STEP 3: FILTERING AND FORMATTING DATA ---`, 'text-lg log-stage');
+            await delay(1500);
+
+            // 3.1 Applying -t filter
+            logMessage(`(3.1) Applying filter '-t' (TCP): All non-TCP protocols (like UDP) are dropped.`, 'log-info');
+            const tcpData = readPCBs.filter(pcb => pcb.proto === 'tcp');
+            logMessage(`(3.2) ${tcpData.length} TCP entries remain.`, 'log-data');
+            await delay(1000);
+
+            // 3.2 Applying -n filter
+            logMessage(`(3.3) Applying filter '-n' (Numerical): Hostnames and Service names (like 'http' or 'ssh') are skipped.`, 'log-info');
+            logMessage(`(3.4) Data is now fully formatted for display.`, 'log-success');
+            
+            logMessage(`\n--- STEP 4: OUTPUT DISPLAY ---`, 'text-lg log-stage');
+            await delay(1500);
+            
+            logMessage(`(4.1) The formatted data is printed to the standard output.`, 'log-info');
+            
+            // Generate the output table
+            const tableHTML = generateOutputTable(tcpData);
+            log.innerHTML += tableHTML;
+            logMessage(`(4.2) Output complete. The netstat process exits.`, 'log-success font-bold');
+            
+            // Add explanation section after the table
+            logMessage(`\n--- TCP STATE EXAMPLES ---`, 'text-lg log-stage');
+            logMessage(`LISTEN: A service (e.g., httpd, sshd) is waiting for an incoming connection.`, 'log-result');
+            logMessage(`ESTABLISHED: A connection is successfully built and data transfer is active.`, 'log-result');
+            logMessage(`FIN_WAIT2: The client has closed its side, waiting for the server to send its FIN.`, 'log-result');
+            logMessage(`TIME_WAIT: The connection has been fully closed, but the port remains in this state to ensure all lingering packets are cleared from the network (prevents 'phantom' sessions).`, 'log-result');
+
+
+            isRunning = false;
+            startBtn.classList.add('hidden');
+            resetBtn.classList.remove('hidden');
+            startBtn.disabled = false;
+        }
+
+        /** Generates the HTML table output mimicking netstat. */
+        function generateOutputTable(data) {
+            let html = `
+                <p class="log-result font-bold mt-4 mb-2">Netstat -ant Output:</p>
+                <table class="output-table">
+                    <thead>
+                        <tr>
+                            <th>Proto</th>
+                            <th>Local Address</th>
+                            <th>Foreign Address</th>
+                            <th>State</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            data.forEach(item => {
+                html += `
+                    <tr class="hover:bg-slate-700">
+                        <td>${item.proto}</td>
+                        <td>${item.local}</td>
+                        <td>${item.foreign}</td>
+                        <td>${item.state}</td>
+                    </tr>
+                `;
+            });
+
+            html += `</tbody></table>`;
+            return html;
+        }
+
+
+        function resetSimulation() {
+            if (isRunning) return;
+            log.innerHTML = '<p class="log-info">System: Ready. Click \'Run Netstat\' to see the process unfold.</p>';
+            
+            startBtn.classList.remove('hidden');
+            resetBtn.classList.add('hidden');
+            startBtn.disabled = false;
+        }
+
+        // Initialize on load
+        window.onload = function() {
+            resetSimulation();
+        };
+
+    </script>
+</body>
+</html>

@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Peer-to-Peer Network Simulator</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Consolas', 'Courier New', monospace;
+            background: linear-gradient(180deg, #353636 50%, #032a36 75%);
+            min-height: 100vh;
+        }
+        a {
+            display: block;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            text-align: center;
+        }
+        .container-card {
+            background-color: white;
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+            padding: 2rem;
+        }
+        .vis-area {
+            position: relative;
+            height: 400px;
+            width: 100%;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.75rem;
+            background-color: #f9fafb;
+            margin-bottom: 1.5rem;
+        }
+        .node {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            font-weight: bold;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+            background-color: #10b981; /* Emerald Green for Peers */
+            transition: background-color 0.3s, transform 0.3s;
+            z-index: 10;
+        }
+        .node-label {
+            font-size: 0.7rem;
+            margin-top: 2px;
+            opacity: 0.8;
+        }
+        .link {
+            position: absolute;
+            background-color: #9ca3af; /* Gray */
+            height: 2px;
+            transform-origin: 0 0;
+            z-index: 5;
+            transition: background-color 0.3s;
+        }
+        .packet {
+            position: absolute;
+            width: 14px;
+            height: 14px;
+            background-color: #f59e0b; /* Amber */
+            border-radius: 50%;
+            z-index: 20;
+            transition: transform linear;
+            box-shadow: 0 0 8px #f59e0b;
+        }
+        .console-log {
+            min-height: 200px;
+            background-color: #1f2937;
+            color: #d1d5db;
+            font-family: 'Consolas', 'Courier New', monospace;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            font-size: 0.85rem;
+        }
+        .log-request { color: #63b3ed; } /* Blue */
+        .log-response { color: #f6ad55; } /* Orange */
+        .log-p2p { color: #10b981; } /* Green */
+        .log-fail { color: #ef4444; font-weight: bold; } /* Red */
+    </style>
+</head>
+<body class="p-4 md:p-10 min-h-screen">
+
+    <div class="max-w-4xl mx-auto">
+        <h1 class="text-4xl font-extrabold text-orange-500 mb-2 text-center">
+            P2P Network Model Simulator
+        </h1>
+        <p class="text-lg text-white text-center">
+            Explore the decentralized architecture where every node is both a client and a server.
+        </p>
+        <p class="text-sm text-yellow-500 mb-8 text-center">
+            Press F5 or Reload/Refresh Browser to Reset Simulation.
+        </p>
+        <a id="link" class="text-sm hover:text-lime-500 text-yellow-200 mb-8 text-center" href="index.html">
+            Back to Simulations Index
+        </a>
+
+        <div class="container-card">
+            <p class="text-gray-700 mb-4 text-sm">
+                [Image of Peer-to-Peer Network Topology]
+                In a Peer-to-Peer (P2P) network, there is no central server. All devices, or **Peers**, are equal in function. This means that if Peer A needs a file, it acts as a **Client**, and the Peer B that hosts the file acts as the **Server**, directly transferring the data without intermediate intervention. This makes the network highly resilient.
+            </p>
+            
+            <div id="p2p-vis" class="vis-area"></div>
+
+            <div class="flex flex-col sm:flex-row gap-4 mb-6">
+                <button onclick="simulateP2PTransfer('P1', 'P3')" id="p1-transfer-btn"
+                        class="flex-grow bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition duration-150 text-center text-sm">
+                    Simulate File Request (P1 $\to$ P3)
+                </button>
+                <button onclick="simulateP2PTransfer('P4', 'P2')" id="p2-transfer-btn"
+                        class="flex-grow bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition duration-150 text-center text-sm">
+                    Simulate File Request (P4 $\to$ P2)
+                </button>
+                <button onclick="simulatePeerFailure('P5')" id="p5-fail-btn"
+                        class="flex-grow bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition duration-150 text-center text-sm">
+                    Simulate Peer Failure (P5)
+                </button>
+            </div>
+
+            <h3 class="text-xl font-semibold text-gray-800 mb-3">Network Console Log</h3>
+            <div id="p2p-log" class="console-log">
+                <p class="log-info">Network is initialized. Click a button above to simulate a transfer or failure scenario.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const NODE_SIZE = 60;
+        const DURATION = 1000; // Animation duration in ms
+        let animationLocked = false;
+        
+        // Peer Topology (using relative coordinates for better responsiveness)
+        const P2P_NODES = {
+            P1: { id: 'P1', x: 150, y: 100 },
+            P2: { id: 'P2', x: 50, y: 300 },
+            P3: { id: 'P3', x: 350, y: 300 },
+            P4: { id: 'P4', x: 550, y: 100 },
+            P5: { id: 'P5', x: 450, y: 300 }
+        };
+
+        // --- Utility Functions ---
+
+        /** Logs a message to the console element */
+        function log(message, type = 'log-info') {
+            const consoleEl = document.getElementById('p2p-log');
+            const timestamp = new Date().toLocaleTimeString('en-US', { hour12: false, second: '2-digit', minute: '2-digit' });
+            consoleEl.innerHTML += `[${timestamp}] <span class="${type}">${message}</span>\n`;
+            consoleEl.scrollTop = consoleEl.scrollHeight;
+        }
+
+        /** Clears the visualization container and returns its dimensions */
+        function clearAndGetDimensions(containerId) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = '';
+            // Recalculate node positions based on container size
+            const { width, height } = container.getBoundingClientRect();
+            
+            // Adjust P2P_NODES coordinates to be relative to the container width
+            // The coordinates defined above are scaled relative to a 600px width.
+            const scaleFactor = width / 600;
+            
+            Object.values(P2P_NODES).forEach(node => {
+                // Adjust coordinates based on current width (for simple scaling)
+                node._x = node.x * scaleFactor;
+                node._y = node.y; // Keep Y simple for this demo
+            });
+
+            return { width, height };
+        }
+
+        /** Draws a node element */
+        function createNode(id, x, y) {
+            const container = document.getElementById('p2p-vis');
+            const node = document.createElement('div');
+            
+            node.className = 'node';
+            node.id = `node-${id}`;
+            node.innerHTML = `<span>${id}</span><span class="node-label">Online</span>`;
+            
+            // Set position, adjusting for node size to center it
+            node.style.left = `${x - NODE_SIZE / 2}px`;
+            node.style.top = `${y - NODE_SIZE / 2}px`;
+            
+            container.appendChild(node);
+        }
+
+        /** Draws a link line between two centered points */
+        function createLink(id1, id2, x1, y1, x2, y2) {
+            const container = document.getElementById('p2p-vis');
+            const dx = x2 - x1;
+            const dy = y2 - y1;
+            const length = Math.sqrt(dx * dx + dy * dy);
+            const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+
+            const link = document.createElement('div');
+            link.className = 'link';
+            // Use a consistent ID for link lookup (e.g., P1-P3, always lower ID first)
+            const linkId = [id1, id2].sort().join('-');
+            link.id = `link-${linkId}`;
+            
+            link.style.width = `${length}px`;
+            link.style.left = `${x1}px`;
+            link.style.top = `${y1}px`;
+            link.style.transform = `rotate(${angle}deg)`;
+            container.appendChild(link);
+            return link;
+        }
+
+        /** Gets the center coordinates of a node */
+        function getNodeCenter(nodeId) {
+            const node = document.getElementById(`node-${nodeId}`);
+            // Use the stored computed coordinates if available (more reliable on resize)
+            const computedPos = Object.values(P2P_NODES).find(n => n.id === nodeId);
+            if (computedPos && computedPos._x !== undefined) {
+                 return {
+                    x: computedPos._x,
+                    y: computedPos._y
+                };
+            }
+            // Fallback:
+            if (!node) return { x: 0, y: 0 };
+            return {
+                x: node.offsetLeft + NODE_SIZE / 2,
+                y: node.offsetTop + NODE_SIZE / 2
+            };
+        }
+
+        /** Animates a packet from start to end */
+        function animatePacket(startX, startY, endX, endY, linkEl, type) {
+            return new Promise(resolve => {
+                const container = document.getElementById('p2p-vis');
+                const packet = document.createElement('div');
+                packet.className = `packet ${type}`;
+                
+                // Initial position (centered on start node)
+                packet.style.left = `${startX - 7}px`;
+                packet.style.top = `${startY - 7}px`;
+                
+                container.appendChild(packet);
+                
+                // Calculate translation needed for the move
+                const translateX = endX - startX;
+                const translateY = endY - startY;
+
+                // Set up transition properties
+                packet.style.transitionDuration = `${DURATION}ms`;
+                
+                // Highlight link during transfer
+                if (linkEl) {
+                    linkEl.style.backgroundColor = '#f59e0b';
+                    linkEl.style.height = '4px';
+                }
+
+                // Trigger the move
+                requestAnimationFrame(() => {
+                    packet.style.transform = `translate(${translateX}px, ${translateY}px)`;
+                });
+
+                // Wait for animation to finish
+                setTimeout(() => {
+                    packet.remove();
+                    if (linkEl) {
+                        linkEl.style.backgroundColor = '#9ca3af';
+                        linkEl.style.height = '2px';
+                    }
+                    resolve();
+                }, DURATION);
+            });
+        }
+
+        // --- Core P2P Functions ---
+
+        function drawP2PNetwork() {
+            // Recalculate positions based on current viewport size
+            const { width, height } = clearAndGetDimensions('p2p-vis'); 
+
+            const nodesArray = Object.entries(P2P_NODES);
+
+            // 1. Draw Nodes
+            nodesArray.forEach(([, pos]) => {
+                createNode(pos.id, pos._x, pos._y);
+            });
+
+            // 2. Draw Links (connecting every node to every other node)
+            for (let i = 0; i < nodesArray.length; i++) {
+                for (let j = i + 1; j < nodesArray.length; j++) {
+                    const [, pos1] = nodesArray[i];
+                    const [, pos2] = nodesArray[j];
+                    createLink(pos1.id, pos2.id, pos1._x, pos1._y, pos2._x, pos2._y);
+                }
+            }
+        }
+
+        async function simulateP2PTransfer(requestorId, providerId) {
+            if (animationLocked) return;
+            animationLocked = true;
+            
+            document.querySelectorAll('button').forEach(btn => btn.disabled = true);
+            log('-------------------------------------------', 'log-info');
+            log(`Simulating Transfer: ${requestorId} $\leftrightarrow$ ${providerId}`, 'log-info');
+
+            const reqPos = getNodeCenter(requestorId);
+            const provPos = getNodeCenter(providerId);
+            
+            // Check if provider is available
+            const providerNode = document.getElementById(`node-${providerId}`);
+            if (providerNode.classList.contains('bg-gray-500')) {
+                log(`Transfer failed: Peer ${providerId} is offline (Failed).`, 'log-fail');
+                animationLocked = false;
+                document.querySelectorAll('button').forEach(btn => btn.disabled = false);
+                return;
+            }
+
+            // Find the direct link element
+            const linkId = [requestorId, providerId].sort().join('-');
+            const linkEl = document.getElementById(`link-${linkId}`);
+
+            // 1. Request Phase (Requestor acts as CLIENT)
+            log(`Peer ${requestorId} (Client) sends Request for file to Peer ${providerId}.`, 'log-request');
+            await animatePacket(reqPos.x, reqPos.y, provPos.x, provPos.y, linkEl, 'log-request');
+
+            // 2. Response Phase (Provider acts as SERVER)
+            log(`Peer ${providerId} (Server) processes and sends File Data back to ${requestorId}.`, 'log-response');
+            await animatePacket(provPos.x, provPos.y, reqPos.x, reqPos.y, linkEl, 'log-response');
+
+            log(`Transfer Complete: File successfully received by ${requestorId}.`, 'log-p2p');
+            log('The roles (Client/Server) were dynamically assigned for this transaction.', 'log-info');
+
+            animationLocked = false;
+            document.querySelectorAll('button').forEach(btn => btn.disabled = false);
+        }
+
+        function simulatePeerFailure(failedId) {
+            document.querySelectorAll('button').forEach(btn => btn.disabled = true);
+            log('-------------------------------------------', 'log-info');
+            log(`Peer ${failedId} is simulating a sudden crash.`, 'log-fail');
+            
+            const failedNode = document.getElementById(`node-${failedId}`);
+            failedNode.style.backgroundColor = '#6b7280'; // Grayed out
+            failedNode.innerHTML = `<span>${failedId}</span><span class="node-label">OFFLINE</span>`;
+            failedNode.classList.add('bg-gray-500');
+
+            log(`Peer ${failedId} is now offline.`, 'log-fail');
+            log('Testing Network Resilience: P1 attempts a transfer to P3...', 'log-info');
+            
+            // Wait briefly then test if the network is still functional (P1 to P3 transfer)
+            setTimeout(() => {
+                simulateP2PTransfer('P1', 'P3').then(() => {
+                    log(`Test Complete: P1 $\leftrightarrow$ P3 transfer was successful.`, 'log-p2p');
+                    log(`Conclusion: The failure of Peer ${failedId} did not stop the rest of the network from communicating directly. This demonstrates P2P resilience.`, 'log-p2p');
+                    
+                    // Reset failure
+                    setTimeout(() => {
+                        log(`Restoring Peer ${failedId}...`, 'log-info');
+                        failedNode.style.backgroundColor = '#10b981';
+                        failedNode.innerHTML = `<span>${failedId}</span><span class="node-label">Online</span>`;
+                        failedNode.classList.remove('bg-gray-500');
+                        document.querySelectorAll('button').forEach(btn => btn.disabled = false);
+                    }, 2000);
+                });
+            }, 1000);
+        }
+        
+        // Handle initial drawing and window resizing
+        window.addEventListener('load', drawP2PNetwork);
+        window.addEventListener('resize', drawP2PNetwork);
+    </script>
+</body>
+</html>

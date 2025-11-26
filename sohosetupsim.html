@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SOHO Router Configuration Lab</title>
+    <style>
+        :root {
+            --router-color: #1e293b;
+            --led-off: #334155;
+            --led-on: #22c55e; /* Green */
+            --led-warn: #eab308; /* Amber */
+            --led-error: #ef4444; /* Red */
+            --ui-bg: #f1f5f9;
+            --ui-sidebar: #334155;
+        }
+
+        body {
+            font-family: 'Consolas', 'Courier New', monospace;
+            background: linear-gradient(180deg, #353636 50%, #032a36 75%);
+            min-height: 100vh;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+        a {
+            display: block;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            text-align: center;
+            color: #ffffff;
+        }
+
+        h1 { color: #d38b06; margin-bottom: 10px; 
+            font-family: 'Consolas', 'Courier New', monospace;
+        }
+        p { color: #ffffff; margin-bottom: 20px; text-align: center; max-width: 700px;}
+
+        /* --- Hardware Visualization (Top) --- */
+        .router-hardware {
+            background: var(--router-color);
+            width: 600px;
+            height: 100px;
+            border-radius: 10px 10px 0 0;
+            position: relative;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 40px;
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.3);
+        }
+        
+        .brand { color: #94a3b8; font-weight: bold; letter-spacing: 2px; font-size: 1.2rem; }
+        
+        .led-panel { display: flex; gap: 15px; }
+        .led-group { display: flex; flex-direction: column; align-items: center; }
+        .led { width: 12px; height: 12px; border-radius: 50%; background: var(--led-off); margin-bottom: 5px; transition: 0.3s; box-shadow: 0 0 5px rgba(0,0,0,0.5) inset; }
+        .led-label { color: #94a3b8; font-size: 0.6rem; font-weight: bold; text-transform: uppercase; }
+        
+        .led.active { background: var(--led-on); box-shadow: 0 0 8px var(--led-on); }
+        .led.warning { background: var(--led-warn); box-shadow: 0 0 8px var(--led-warn); }
+        .led.error { background: var(--led-error); box-shadow: 0 0 8px var(--led-error); }
+
+        /* --- Simulation Interface (Bottom) --- */
+        .interface-container {
+            width: 900px;
+            height: 550px;
+            background: white;
+            display: flex;
+            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.2);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 200px;
+            background: var(--ui-sidebar);
+            color: white;
+            padding-top: 20px;
+        }
+        .menu-item {
+            padding: 15px 20px;
+            cursor: pointer;
+            border-left: 4px solid transparent;
+            transition: 0.2s;
+        }
+        .menu-item:hover { background: #475569; }
+        .menu-item.active { background: #475569; border-left-color: #38bdf8; font-weight: bold; }
+
+        /* Main Content Area */
+        .content-area {
+            flex: 1;
+            padding: 30px;
+            background: var(--ui-bg);
+            overflow-y: auto;
+        }
+
+        .panel { display: none; }
+        .panel.active { display: block; }
+
+        h2 { margin-top: 0; border-bottom: 2px solid #cbd5e1; padding-bottom: 10px; color: #334155; }
+        
+        .form-group { margin-bottom: 20px; }
+        label { display: block; font-weight: bold; margin-bottom: 5px; font-size: 0.9rem; color: #475569; }
+        input[type="text"], select {
+            width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px;
+            max-width: 400px; font-family: monospace;
+        }
+        
+        .info-box {
+            background: #e0f2fe; border-left: 4px solid #0ea5e9;
+            padding: 15px; margin-bottom: 20px; font-size: 0.9rem; color: #0c4a6e;
+        }
+
+        .error-box {
+            background: #fee2e2; border-left: 4px solid #ef4444;
+            padding: 15px; margin-bottom: 20px; font-size: 0.9rem; color: #7f1d1d;
+            display: none;
+        }
+
+        button {
+            background: #0f172a; color: white; padding: 10px 20px; border: none;
+            border-radius: 4px; cursor: pointer; font-weight: bold;
+        }
+        button:hover { background: #334155; }
+        button.secondary { background: #94a3b8; margin-right: 10px;}
+
+        /* Client Device Simulator */
+        .client-sim {
+            margin-top: 20px;
+            padding: 15px;
+            border: 2px dashed #94a3b8;
+            border-radius: 8px;
+            width: 90%;
+            background: #f8fafc;
+        }
+        .client-status { font-weight: bold; }
+        .status-connected { color: var(--led-on); }
+        .status-disconnected { color: var(--led-error); }
+
+    </style>
+</head>
+<body>
+
+    <h1>SOHO Router Simulator</h1>
+    <p>Configure the Internet (WAN), Local Network (LAN), and Wireless settings. Incorrect configurations will break the client connectivity!</p>
+    <p class="text-sm mb-8 text-center">
+            Press F5 or Reload/Refresh Browser to Reset Simulation.
+        </p>
+        <a id="link" class="text-sm hover:text-lime-500 text-yellow-200 mb-8 text-center" href="index.html">
+            Back to Simulations Index
+        </a>
+
+    <div class="router-hardware">
+        <div class="brand">NETSIM 2000</div>
+        <div class="led-panel">
+            <div class="led-group">
+                <div class="led active" id="led-power"></div>
+                <span class="led-label">Power</span>
+            </div>
+            <div class="led-group">
+                <div class="led" id="led-wan"></div>
+                <span class="led-label">Internet</span>
+            </div>
+            <div class="led-group">
+                <div class="led" id="led-wifi"></div>
+                <span class="led-label">WiFi</span>
+            </div>
+            <div class="led-group">
+                <div class="led" id="led-lan"></div>
+                <span class="led-label">LAN 1</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="interface-container">
+        <div class="sidebar">
+            <div class="menu-item active" onclick="showPanel('status')">Dashboard</div>
+            <div class="menu-item" onclick="showPanel('wan')">Internet (WAN)</div>
+            <div class="menu-item" onclick="showPanel('lan')">Local Network (LAN)</div>
+            <div class="menu-item" onclick="showPanel('wifi')">Wireless</div>
+        </div>
+
+        <div class="content-area">
+            
+            <div id="global-error" class="error-box"></div>
+
+            <div id="panel-status" class="panel active">
+                <h2>System Status</h2>
+                <div class="info-box">
+                    <strong>WAN IP:</strong> <span id="disp-wan-ip">0.0.0.0</span><br>
+                    <strong>LAN Gateway:</strong> <span id="disp-lan-ip">192.168.0.1</span><br>
+                    <strong>Wireless SSID:</strong> <span id="disp-ssid">NetSim_Default</span>
+                </div>
+
+                <div class="client-sim">
+                    <h3>Test Client (Laptop)</h3>
+                    <p>Status: <span id="client-status-text" class="client-status status-disconnected">Scanning...</span></p>
+                    <p style="font-family:monospace; font-size:0.9rem;">
+                        Assigned IP: <span id="client-ip">...</span><br>
+                        Gateway: <span id="client-gateway">...</span>
+                    </p>
+                    <button onclick="refreshClient()">Reconnect Client</button>
+                </div>
+            </div>
+
+            <div id="panel-wan" class="panel">
+                <h2>Internet Setup</h2>
+                <p>Configure how the router connects to the ISP.</p>
+                <div class="form-group">
+                    <label>Connection Type</label>
+                    <select id="wan-type">
+                        <option value="dhcp">Dynamic IP (DHCP) - Standard Cable/Fiber</option>
+                        <option value="static">Static IP (Advanced)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Cable Status</label>
+                    <button class="secondary" onclick="toggleWanCable()" id="btn-wan-cable">Plug in WAN Cable</button>
+                </div>
+                <button onclick="saveSettings()">Save Settings</button>
+            </div>
+
+            <div id="panel-lan" class="panel">
+                <h2>Local Network (LAN)</h2>
+                <div class="info-box">This configures the "Gateway" address of the router and the DHCP server for your devices.</div>
+                
+                <div class="form-group">
+                    <label>Router IP Address (Gateway)</label>
+                    <input type="text" id="input-lan-ip" value="192.168.0.1">
+                </div>
+                
+                <div class="form-group">
+                    <label>Subnet Mask</label>
+                    <input type="text" value="255.255.255.0" disabled style="background:#eee;">
+                </div>
+
+                <div class="form-group">
+                    <label>DHCP Server</label>
+                    <select id="input-dhcp">
+                        <option value="on">Enabled</option>
+                        <option value="off">Disabled</option>
+                    </select>
+                </div>
+
+                <button onclick="saveSettings()">Save Settings</button>
+            </div>
+
+            <div id="panel-wifi" class="panel">
+                <h2>Wireless Settings</h2>
+                <div class="form-group">
+                    <label>Network Name (SSID)</label>
+                    <input type="text" id="input-ssid" value="NetSim_Default">
+                </div>
+                <div class="form-group">
+                    <label>Security Mode</label>
+                    <select id="input-security">
+                        <option value="none">Open (No Password)</option>
+                        <option value="wpa2">WPA2-PSK (Recommended)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="text" id="input-pass" placeholder="Enter password">
+                </div>
+                <button onclick="saveSettings()">Save Settings</button>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        // Configuration State
+        let config = {
+            wanConnected: false,
+            wanIP: "0.0.0.0",
+            lanIP: "192.168.0.1",
+            dhcpEnabled: true,
+            ssid: "NetSim_Default",
+            security: "none",
+            password: ""
+        };
+
+        // Simulated Client State
+        let client = {
+            connected: false,
+            ip: "0.0.0.0",
+            gateway: "0.0.0.0"
+        };
+
+        function showPanel(panelId) {
+            // Update UI tabs
+            document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('active'));
+            event.target.classList.add('active');
+
+            // Hide all panels
+            document.querySelectorAll('.panel').forEach(el => el.classList.remove('active'));
+            // Show selected
+            document.getElementById('panel-' + panelId).classList.add('active');
+            
+            // Clear errors on nav
+            document.getElementById('global-error').style.display = 'none';
+        }
+
+        function toggleWanCable() {
+            config.wanConnected = !config.wanConnected;
+            const btn = document.getElementById('btn-wan-cable');
+            
+            if(config.wanConnected) {
+                btn.innerText = "Unplug WAN Cable";
+                btn.style.background = "#22c55e";
+                // Simulate getting an ISP IP
+                config.wanIP = "203.0.113." + Math.floor(Math.random() * 254 + 1);
+            } else {
+                btn.innerText = "Plug in WAN Cable";
+                btn.style.background = "#94a3b8";
+                config.wanIP = "0.0.0.0";
+            }
+            updateDashboard();
+        }
+
+        function validateIp(ip) {
+            const regex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+            return regex.test(ip);
+        }
+
+        function saveSettings() {
+            const errorBox = document.getElementById('global-error');
+            errorBox.style.display = 'none';
+            let errors = [];
+
+            // 1. Get Values
+            const newLanIp = document.getElementById('input-lan-ip').value;
+            const dhcpStatus = document.getElementById('input-dhcp').value;
+            const newSsid = document.getElementById('input-ssid').value;
+            const secType = document.getElementById('input-security').value;
+            const pass = document.getElementById('input-pass').value;
+
+            // 2. Validations
+            if (!validateIp(newLanIp)) errors.push("Invalid LAN IP Address format.");
+            
+            if (secType === 'wpa2' && pass.length < 8) {
+                errors.push("WPA2 Password must be at least 8 characters.");
+            }
+
+            // SUBNET CONFLICT CHECK (Simple /24 check)
+            // If WAN IP is 192.168.0.x and LAN IP is 192.168.0.x -> Routing fails
+            if (config.wanConnected) {
+                const wanSubnet = config.wanIP.split('.').slice(0,3).join('.');
+                const lanSubnet = newLanIp.split('.').slice(0,3).join('.');
+                if (wanSubnet === lanSubnet) {
+                    errors.push("CRITICAL CONFLICT: WAN and LAN cannot be on the same subnet (" + wanSubnet + ".x). Change the LAN IP.");
+                }
+            }
+
+            if (errors.length > 0) {
+                errorBox.innerHTML = "<strong>Configuration Error:</strong><br>" + errors.join("<br>");
+                errorBox.style.display = 'block';
+                return;
+            }
+
+            // 3. Apply Settings
+            config.lanIP = newLanIp;
+            config.dhcpEnabled = (dhcpStatus === 'on');
+            config.ssid = newSsid;
+            config.security = secType;
+            config.password = pass;
+
+            alert("Settings Saved! Router is restarting services...");
+            updateDashboard();
+            refreshClient(); // Client needs to reconnect
+        }
+
+        function updateDashboard() {
+            // Update Dashboard Text
+            document.getElementById('disp-wan-ip').innerText = config.wanIP;
+            document.getElementById('disp-lan-ip').innerText = config.lanIP;
+            document.getElementById('disp-ssid').innerText = config.ssid;
+
+            // Update Hardware LEDs
+            const wanLed = document.getElementById('led-wan');
+            const wifiLed = document.getElementById('led-wifi');
+
+            if(config.wanConnected) {
+                wanLed.className = "led active";
+            } else {
+                wanLed.className = "led error"; // Red if unplugged
+            }
+
+            if(config.ssid.length > 0) {
+                wifiLed.className = "led active";
+            } else {
+                wifiLed.className = "led";
+            }
+        }
+
+        async function refreshClient() {
+            const statusTxt = document.getElementById('client-status-text');
+            const ipTxt = document.getElementById('client-ip');
+            const gwTxt = document.getElementById('client-gateway');
+            const lanLed = document.getElementById('led-lan');
+
+            statusTxt.innerText = "Renewing Lease...";
+            statusTxt.className = "client-status";
+            lanLed.className = "led"; // Flash off
+
+            await new Promise(r => setTimeout(r, 1000)); // Simulate delay
+
+            // CLIENT LOGIC
+            
+            // 1. DHCP Check
+            if (!config.dhcpEnabled) {
+                statusTxt.innerText = "Connection Failed (No DHCP)";
+                statusTxt.className = "client-status status-disconnected";
+                ipTxt.innerText = "169.254.x.x (APIPA)";
+                gwTxt.innerText = "Unknown";
+                lanLed.className = "led error";
+                return;
+            }
+
+            // 2. Security Check
+            // (In this sim, we assume the client knows the password if configured, 
+            // but if you want to make it harder, we could add a client password field.
+            // For now, we assume success if DHCP is on).
+
+            // 3. Assign IP based on LAN Subnet
+            const subnetParts = config.lanIP.split('.');
+            const clientOctet = Math.floor(Math.random() * 100 + 50); // Random .50 to .150
+            
+            client.ip = `${subnetParts[0]}.${subnetParts[1]}.${subnetParts[2]}.${clientOctet}`;
+            client.gateway = config.lanIP;
+            client.connected = true;
+
+            statusTxt.innerText = "Connected via Ethernet/WiFi";
+            statusTxt.className = "client-status status-connected";
+            ipTxt.innerText = client.ip;
+            gwTxt.innerText = client.gateway;
+            lanLed.className = "led active"; // Green
+        }
+
+        // Initialize
+        updateDashboard();
+        refreshClient();
+
+    </script>
+</body>
+</html>

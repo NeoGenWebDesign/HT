@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DNS Spam Management Simulator (SPF, DKIM, DMARC)</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Consolas', 'Courier New', monospace;
+            background: linear-gradient(180deg, #353636 50%, #032a36 75%);
+            min-height: 100vh;
+        }
+        a {
+            display: block;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            text-align: center;
+        }
+        .container-card {
+            background-color: white;
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+            padding: 2rem;
+            transition: all 0.3s ease;
+        }
+        .console-output {
+            background-color: #1f2937; /* Dark console background */
+            color: #39df10; /* Light gray text */
+            font-family: 'Consolas', 'Courier New', monospace;
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            min-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            line-height: 1.4;
+        }
+        .log-step { color: #34d399; /* Green for steps */ }
+        .log-lookup { color: #60a5fa; /* Blue for lookups */ }
+        .log-data { color: #fcd34d; /* Yellow for data */ }
+        .log-fail { color: #ef4444; /* Red for fails */ }
+        .log-pass { color: #10b981; /* Emerald for passes */ }
+        .log-verdict { font-weight: bold; font-size: 1.25rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px dashed #4b5563; }
+        .log-verdict.pass { color: #10b981; }
+        .log-verdict.quarantine { color: #f97316; }
+        .log-verdict.reject { color: #dc2626; }
+    </style>
+</head>
+<body class="p-4 md:p-10 min-h-screen">
+
+    <div class="max-w-7xl mx-auto">
+        <h1 class="text-4xl font-extrabold text-orange-500 mb-2 text-center">
+            Email Authentication Simulator (SPF, DKIM, DMARC)
+        </h1>
+        <p class="text-lg text-white mb-8 text-center">
+            Trace the steps a receiving server takes to validate an incoming email using DNS records.
+        </p>
+        <p class="text-sm text-yellow-500 mb-8 text-center">
+            Press F5 or Reload/Refresh Browser to Reset Simulation.
+        </p>
+        <a id="link" class="text-sm hover:text-lime-500 text-yellow-200 mb-8 text-center" href="index.html">
+            Back to Simulations Index
+        </a>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+            
+            <!-- Control Panel & Explanation -->
+            <div class="container-card">
+                <h3 class="text-2xl font-bold text-gray-800 mb-4">Simulation Controls</h3>
+
+                <label for="sendingIP" class="block text-sm font-medium text-gray-700 mb-2">
+                    1. Simulated Sending Server IP
+                </label>
+                <input type="text" id="sendingIP" value="203.0.113.45" 
+                       class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 mb-2 font-mono text-base">
+
+                <label for="dkimStatus" class="block text-sm font-medium text-gray-700 mb-2">
+                    2. Simulated DKIM Signature Check
+                </label>
+                <select id="dkimStatus" 
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 mb-6 font-mono text-base">
+                    <option value="Pass">Pass: Signature is valid and verified against DKIM TXT record</option>
+                    <option value="Fail">Fail: Signature is missing or invalid</option>
+                </select>
+                
+                <button id="run-btn" onclick="runSpamCheck()" 
+                        class="w-full bg-amber-600 hover:bg-amber-800 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-150">
+                    Run Authentication Process
+                </button>
+
+                <div class="mt-6 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                    <p class="font-bold text-yellow-800">Scenario:</p>
+                    <p class="text-sm text-yellow-700">The receiving server gets an email **From:** `user@example.com` sent from the IP address specified above. It begins its 3-step DNS validation.</p>
+                </div>
+            </div>
+            
+            <!-- Console Output -->
+            <div class="container-card p-1">
+                <h3 class="text-2xl font-bold text-gray-800 px-6 pt-4">Validation Console Log</h3>
+                <div id="console" class="console-output">
+                    Waiting to start simulation...
+                </div>
+            </div>
+        </div>
+        
+        <!-- Explanation Panel -->
+        <div class="container-card mt-6">
+            <h3 class="text-2xl font-bold text-gray-800 mb-0">The Anti-Spam DNS Records</h3>
+            
+            <p class="mb-4">These three records work together to prove the sender's identity. They are all stored as **TXT records** in the domain's DNS zone.</p>
+            
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+                <!-- SPF -->
+                <div class="p-4 rounded-lg bg-red-50 border-l-4 border-red-500">
+                    <p class="font-bold text-red-700 text-xl mb-2">1. SPF (Sender Policy Framework)</p>
+                    <p class="text-gray-700 text-sm">Checks if the IP address that *sent* the email is authorized by the domain owner. If the sending IP is not listed in the SPF record, the email fails this check.</p>
+                    <p class="font-mono text-xs text-red-900 mt-2">DNS Lookup: <code>example.com</code> for TXT.</p>
+                    <p class="font-mono text-xs text-red-900">Example: <code>v=spf1 ip4:203.0.113.0/24 include:mailservice.net -all</code></p>
+                </div>
+
+                <!-- DKIM -->
+                <div class="p-4 rounded-lg bg-orange-50 border-l-4 border-orange-500">
+                    <p class="font-bold text-orange-700 text-xl mb-2">2. DKIM (DomainKeys Identified Mail)</p>
+                    <p class="text-gray-700 text-sm">Uses cryptography to verify the email hasn't been tampered with in transit. The sender attaches a digital signature, and the receiver performs a DNS lookup to retrieve the public key needed to verify it.</p>
+                    <p class="font-mono text-xs text-orange-900 mt-2">DNS Lookup: <code>selector._domainkey.example.com</code> for TXT.</p>
+                    <p class="font-mono text-xs text-orange-900">Example: <code>v=DKIM1; k=rsa; p=MIGfMA0GC... [Long Key]</code></p>
+                </div>
+
+                <!-- DMARC -->
+                <div class="p-4 rounded-lg bg-blue-50 border-l-4 border-blue-500">
+                    <p class="font-bold text-blue-700 text-xl mb-2">3. DMARC (Domain-based Message Authentication...)</p>
+                    <p class="text-gray-700 text-sm">Tells the receiving server what to do if the SPF and/or DKIM checks fail. It also specifies a reporting address to send feedback on authentication failures.</p>
+                    <p class="font-mono text-xs text-blue-900 mt-2">DNS Lookup: <code>_dmarc.example.com</code> for TXT.</p>
+                    <p class="font-mono text-xs text-blue-900">Example Policy: <code>v=DMARC1; p=quarantine; rua=mailto:dmarc@example.com</code></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Simulated DNS Zone Data (Authoritative Records) ---
+        const ZONES = {
+            // SPF Record: Authorized range is 203.0.113.0/24
+            'example.com': {
+                SPF: 'v=spf1 ip4:203.0.113.0/24 -all', 
+                DMARC: 'v=DMARC1; p=quarantine; pct=100; rua=mailto:dmarc-reports@example.com'
+            },
+            // DKIM Public Key (Simulated TXT record)
+            's1._domainkey.example.com': {
+                DKIM: 'v=DKIM1; k=rsa; p=MIGfMA0GCsM2lAIDAQAB' 
+            }
+        };
+
+        const consoleOutput = document.getElementById('console');
+        const sendingIPInput = document.getElementById('sendingIP');
+        const dkimStatusSelect = document.getElementById('dkimStatus');
+        const defaultDomain = 'example.com';
+        const dkimSelector = 's1';
+
+        /** Helper function to log messages to the console with styling */
+        function log(message, type = 'text') {
+            const time = new Date().toLocaleTimeString('en-US', { hour12: false });
+            let className = '';
+            
+            switch(type) {
+                case 'step': className = 'log-step'; break;
+                case 'lookup': className = 'log-lookup'; break;
+                case 'data': className = 'log-data'; break;
+                case 'fail': className = 'log-fail'; break;
+                case 'pass': className = 'log-pass'; break;
+                case 'verdict': className = `log-verdict ${message.toLowerCase()}`; break;
+                default: className = 'output-text'; break;
+            }
+
+            consoleOutput.innerHTML += `[${time}] <span class="${className}">${message}</span>\n`;
+            consoleOutput.scrollTop = consoleOutput.scrollHeight; // Auto-scroll
+        }
+
+        /** Simulates checking if an IP is within the authorized range (simple CIDR check) */
+        function checkSpf(ip, spfRecord) {
+            // Simplified check for demonstration: only checks the exact IP in the record
+            const authorizedIP = '203.0.113.45'; // The specific IP defined in the SPF rule
+            return ip === authorizedIP; 
+        }
+
+        /** Main simulation logic */
+        async function runSpamCheck() {
+            consoleOutput.innerHTML = ''; // Clear console
+            const sendingIP = sendingIPInput.value.trim();
+            const dkimResult = dkimStatusSelect.value;
+            let spfVerdict = 'Unknown';
+            let dkimVerdict = dkimResult;
+            let finalAction = 'Accept (default)';
+
+            // --- STEP 1: SPF CHECK ---
+            log('Starting email authentication checks.', 'step');
+            log(`1. SENDER POLICY FRAMEWORK (SPF) CHECK`, 'step');
+            
+            log(`-> DNS Lookup: TXT record for ${defaultDomain}`, 'lookup');
+            await new Promise(r => setTimeout(r, 500)); 
+            
+            const spfRecord = ZONES[defaultDomain].SPF;
+            log(`<- Received SPF Record: ${spfRecord}`, 'data');
+            
+            log(`-> Checking if Sending IP (${sendingIP}) is authorized...`, 'lookup');
+            await new Promise(r => setTimeout(r, 500)); 
+
+            if (checkSpf(sendingIP, spfRecord)) {
+                spfVerdict = 'Pass';
+                log(`Result: SPF Passed. IP ${sendingIP} is explicitly authorized.`, 'pass');
+            } else {
+                spfVerdict = 'Fail';
+                log(`Result: SPF Failed. IP ${sendingIP} is NOT authorized by the SPF record.`, 'fail');
+            }
+
+            // --- STEP 2: DKIM CHECK ---
+            log('\n2. DOMAINKEYS IDENTIFIED MAIL (DKIM) CHECK', 'step');
+
+            log(`-> DNS Lookup: TXT record for ${dkimSelector}._domainkey.${defaultDomain} (Public Key)`, 'lookup');
+            await new Promise(r => setTimeout(r, 500)); 
+            
+            const dkimRecord = ZONES[`${dkimSelector}._domainkey.example.com`].DKIM;
+            log(`<- Received DKIM Public Key: ${dkimRecord.substring(0, 40)}...`, 'data');
+
+            log(`-> Verifying email signature using public key... (Simulated result: ${dkimResult})`, 'lookup');
+            await new Promise(r => setTimeout(r, 500)); 
+
+            if (dkimResult === 'Pass') {
+                log(`Result: DKIM Passed. Signature verified successfully.`, 'pass');
+            } else {
+                log(`Result: DKIM Failed. Signature missing or tampered with.`, 'fail');
+            }
+
+            // --- STEP 3: DMARC POLICY CHECK ---
+            log('\n3. DMARC POLICY CHECK', 'step');
+            
+            log(`-> DNS Lookup: TXT record for _dmarc.${defaultDomain}`, 'lookup');
+            await new Promise(r => setTimeout(r, 500)); 
+
+            const dmarcRecord = ZONES[defaultDomain].DMARC;
+            log(`<- Received DMARC Record: ${dmarcRecord}`, 'data');
+            
+            const policyMatch = dmarcRecord.match(/p=([^;]+)/);
+            const policy = policyMatch ? policyMatch[1] : 'none';
+            log(`-> Extracted DMARC Policy (p): ${policy}`, 'data');
+
+            log('-> Evaluating combined results and policy...', 'lookup');
+            await new Promise(r => setTimeout(r, 500)); 
+
+            // DMARC validation requires *at least one* of SPF or DKIM to align and pass.
+            // If both fail: Apply the DMARC policy.
+            if (spfVerdict === 'Fail' && dkimVerdict === 'Fail') {
+                finalAction = policy;
+                log(`Authentication Failed (SPF: Fail, DKIM: Fail). Applying DMARC policy: ${policy.toUpperCase()}`, 'fail');
+            } else {
+                finalAction = 'Accept';
+                log(`Authentication Passed (at least one check passed/aligned). Accepting email.`, 'pass');
+            }
+
+            // --- FINAL VERDICT ---
+            log(`\n** FINAL DMARC ACTION: ${finalAction.toUpperCase()} **`, 'verdict', finalAction);
+            if (finalAction === 'quarantine') {
+                log('The email is moved to the recipient\'s spam folder.', 'verdict');
+            } else if (finalAction === 'reject') {
+                log('The connection is terminated, and the email is permanently blocked.', 'verdict');
+            } else if (finalAction === 'Accept') {
+                log('The email is delivered to the recipient\'s inbox.', 'verdict');
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Laser Printer Simulation</title>
+    <style>
+        body {
+            font-family: Consolas, sans-serif;
+            margin: 20px;
+            background: linear-gradient(180deg, #353636 50%, #032a36 75%);
+            min-height: 100vh;
+        }
+        a {
+            display: block;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            text-align: center;
+            color: #ffffff;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: #858282;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #f08e0f;
+            text-align: center;
+        }
+        #stage-display {
+            border: 2px solid #050305d7;
+            padding: 15px;
+            margin-top: 20px;
+            border-radius: 6px;
+            min-height: 150px;
+            background-color: #ffffff;
+        }
+        #stage-title {
+            color: #800657;
+            font-size: 1.5em;
+            margin-top: 0;
+        }
+        #stage-description {
+            font-size: 1.1em;
+            color: #555;
+        }
+        button {
+            background-color: #2f8bf5;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1em;
+            margin-top: 10px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #218838;
+        }
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Laser Printing Process Simulation</h1>
+        <a id="link" class="text-sm hover:text-lime-500 text-yellow-200 mb-8 text-center" href="index.html">
+            Back to Simulations Index
+        </a>
+        
+        <div id="stage-display">
+            <h2 id="stage-title">Ready to Start</h2>
+            <p id="stage-description">Click "Start Simulation" to begin the laser printer's six-step process.</p>
+        </div>
+        
+        <button onclick="nextStage()" id="control-button">Start Simulation</button>
+        <button onclick="resetSimulation()" id="reset-button" disabled>Reset</button>
+
+        
+    </div>
+
+    <script>
+        // Array containing the six stages of the laser printing process
+        const printingStages = [
+            {
+                title: "1. Cleaning",
+                description: "The **drum** (photosensitive cylinder) is cleaned of any residual toner and the electrical charge on the drum is neutralized by a discharge lamp, preparing it for a fresh charge."
+            },
+            {
+                title: "2. Conditioning (Charging)",
+                description: "A primary corona wire or roller applies a uniform, high **negative electrical charge** across the entire surface of the photosensitive drum."
+            },
+            {
+                title: "3. Exposing (Writing)",
+                description: "The **laser** beam scans the drum, neutralizing the negative charge in areas where toner should be placed (the image/text), creating a latent electrical image with a charge of approximately **-100 volts**."
+            },
+            {
+                title: "4. Developing",
+                description: "The negatively charged **toner** particles are attracted to the areas of the drum that were exposed by the laser (which now have a less negative charge), making the latent image visible."
+            },
+            {
+                title: "5. Transferring",
+                description: "A transfer roller or corona wire applies a strong **positive charge** to the back of the paper, pulling the negatively charged toner from the drum onto the paper."
+            },
+            {
+                title: "6. Fusing",
+                description: "The paper passes through the **fusing assembly**, which uses a combination of high **heat** and **pressure** to permanently melt and press the toner into the paper fibers."
+            }
+        ];
+
+        let currentStageIndex = -1; // -1 indicates the "Ready to Start" state
+
+        const titleElement = document.getElementById('stage-title');
+        const descriptionElement = document.getElementById('stage-description');
+        const controlButton = document.getElementById('control-button');
+        const resetButton = document.getElementById('reset-button');
+
+        /**
+         * Advances the simulation to the next stage.
+         */
+        function nextStage() {
+            currentStageIndex++;
+
+            if (currentStageIndex < printingStages.length) {
+                // Display the current stage
+                const stage = printingStages[currentStageIndex];
+                titleElement.innerHTML = stage.title;
+                descriptionElement.innerHTML = stage.description;
+                
+                // Update button text
+                if (currentStageIndex < printingStages.length - 1) {
+                    controlButton.textContent = `Next Stage (${currentStageIndex + 2} of 6)`;
+                } else {
+                    controlButton.textContent = "Process Complete";
+                    controlButton.disabled = true;
+                    resetButton.disabled = false;
+                }
+            }
+        }
+
+        /**
+         * Resets the simulation back to the start state.
+         */
+        function resetSimulation() {
+            currentStageIndex = -1;
+            titleElement.innerHTML = "Ready to Start";
+            descriptionElement.innerHTML = 'Click "Start Simulation" to begin the laser printer\'s six-step process.';
+            controlButton.textContent = "Start Simulation";
+            controlButton.disabled = false;
+            resetButton.disabled = true;
+        }
+    </script>
+</body>
+</html>

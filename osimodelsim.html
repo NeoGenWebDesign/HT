@@ -1,0 +1,1230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OSI Model Executive Report</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary-color: #9c36e0;
+            --secondary-color: #979797;
+            --accent-color: #eb5ceb;
+            --text-dark: #1f2937;
+            --text-light: #6b7280;
+            --bg-light: #f9fafb;
+            --bg-white: #ffffff;
+            --border-color: #e5e7eb;
+            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+
+        body {
+            font-family: -apple-system, 'Consolas', sans-serif;
+            line-height: 1.6;
+            color: var(--text-dark);
+            background: linear-gradient(180deg, #353636 50%, #032a36 75%);
+            min-height: 100vh;
+        }
+        a {
+            display: block;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            text-align: center;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 1rem;
+        }
+
+        .report-wrapper {
+            background: var(--bg-white);
+            border-radius: 16px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            margin-top: 2rem;
+        }
+
+        .header {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+            padding: 3rem 2rem;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: clamp(2rem, 5vw, 3rem);
+            font-weight: 700;
+            margin-bottom: 1rem;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .header .subtitle {
+            font-size: clamp(1.1rem, 3vw, 1.3rem);
+            opacity: 0.95;
+            font-weight: 300;
+        }
+
+        .tabs-container {
+            position: sticky;
+            top: 0;
+            background: var(--bg-white);
+            z-index: 100;
+            box-shadow: var(--shadow-md);
+            border-bottom: 3px solid var(--primary-color);
+        }
+
+        .tabs {
+            display: flex;
+            overflow-x: auto;
+            scrollbar-width: thin;
+            scrollbar-color: var(--accent-color) var(--bg-light);
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .tabs::-webkit-scrollbar {
+            height: 8px;
+        }
+
+        .tabs::-webkit-scrollbar-track {
+            background: var(--bg-light);
+        }
+
+        .tabs::-webkit-scrollbar-thumb {
+            background: var(--accent-color);
+            border-radius: 4px;
+        }
+
+        .tab {
+            flex: 1;
+            min-width: 120px;
+            padding: 1rem 1.5rem;
+            background: var(--bg-white);
+            border: none;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text-light);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border-bottom: 3px solid transparent;
+            margin-bottom: -3px;
+            white-space: nowrap;
+        }
+
+        .tab:hover {
+            background: var(--bg-light);
+            color: var(--primary-color);
+        }
+
+        .tab.active {
+            background: var(--bg-white);
+            color: var(--primary-color);
+            border-bottom-color: var(--primary-color);
+            box-shadow: inset 0 -2px 0 var(--primary-color);
+        }
+
+        .tab .layer-number {
+            display: block;
+            font-size: 0.75rem;
+            opacity: 0.7;
+            margin-bottom: 0.2rem;
+        }
+
+        .content-area {
+            padding: 2rem;
+            min-height: 500px;
+        }
+
+        .section {
+            display: none;
+            animation: fadeIn 0.5s ease-in-out;
+        }
+
+        .section.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .section-header {
+            margin-bottom: 2rem;
+        }
+
+        .section h2 {
+            font-size: clamp(1.5rem, 4vw, 2rem);
+            color: var(--primary-color);
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .layer-badge {
+            background: var(--primary-color);
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+
+        .mnemonic {
+            background: var(--bg-light);
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+            border-left: 4px solid var(--accent-color);
+        }
+
+        .mnemonic strong {
+            color: var(--primary-color);
+            font-size: 1.1rem;
+        }
+
+        .content-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+
+        @media (min-width: 768px) {
+            .content-grid {
+                grid-template-columns: 2fr 1fr;
+            }
+        }
+
+        .main-content {
+            background: var(--bg-light);
+            padding: 1.5rem;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+        }
+
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .info-card {
+            background: var(--bg-white);
+            padding: 1.5rem;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .info-card h3 {
+            color: var(--primary-color);
+            margin-bottom: 1rem;
+            font-size: 1.1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .info-card ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .info-card li {
+            padding: 0.5rem 0;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .info-card li:last-child {
+            border-bottom: none;
+        }
+
+        .info-card li::before {
+            content: "▸";
+            color: var(--accent-color);
+            font-weight: bold;
+        }
+
+        .expandable {
+            margin-top: 1.5rem;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .expandable-header {
+            background: var(--bg-light);
+            padding: 1rem 1.5rem;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background 0.3s;
+            user-select: none;
+        }
+
+        .expandable-header:hover {
+            background: var(--border-color);
+        }
+
+        .expandable-header h4 {
+            margin: 0;
+            color: var(--text-dark);
+        }
+
+        .expand-icon {
+            transition: transform 0.3s;
+            font-size: 1.2rem;
+            color: var(--accent-color);
+        }
+
+        .expandable.expanded .expand-icon {
+            transform: rotate(180deg);
+        }
+
+        .expandable-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+            background: var(--bg-white);
+        }
+
+        .expandable.expanded .expandable-content {
+            max-height: 1000px;
+            transition: max-height 0.5s ease-in;
+        }
+
+        .expandable-content-inner {
+            padding: 1.5rem;
+        }
+
+        .chart-container {
+            margin: 2rem 0;
+            padding: 1.5rem;
+            background: var(--bg-white);
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .chart-wrapper {
+            position: relative;
+            height: 400px;
+            max-height: 50vh;
+        }
+
+        .summary-section {
+            background: linear-gradient(135deg, var(--bg-light), var(--bg-white));
+            padding: 2rem;
+            border-radius: 12px;
+            margin-top: 2rem;
+            border: 1px solid var(--border-color);
+        }
+
+        .summary-section h3 {
+            color: var(--primary-color);
+            margin-bottom: 1rem;
+            font-size: 1.3rem;
+        }
+
+        .key-points {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1rem;
+        }
+
+        @media (min-width: 640px) {
+            .key-points {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (min-width: 1024px) {
+            .key-points {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+
+        .key-point {
+            background: var(--bg-white);
+            padding: 1rem;
+            border-radius: 8px;
+            border-left: 4px solid var(--accent-color);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .key-point h4 {
+            color: var(--primary-color);
+            font-size: 0.95rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .key-point p {
+            color: var(--text-light);
+            font-size: 0.875rem;
+            line-height: 1.5;
+        }
+
+        @media (max-width: 640px) {
+            .tab {
+                font-size: 0.8rem;
+                padding: 0.75rem 1rem;
+                min-width: 100px;
+            }
+            
+            .content-area {
+                padding: 1rem;
+            }
+            
+            .header {
+                padding: 2rem 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="report-wrapper">
+            <div class="header">
+                <h1>OSI Model Executive Report</h1>
+                <div class="subtitle">Open Systems Interconnection Reference Model Analysis</div>
+                <a id="link" class="text-sm hover:text-lime-500 text-yellow-200 mb-8 text-center" href="index.html">
+            Back to Simulations Index
+        </a>
+            </div>
+
+            <div class="tabs-container">
+                <div class="tabs">
+                    <button class="tab active" data-tab="layer7">
+                        <span class="layer-number">Layer 7</span>
+                        Application
+                    </button>
+                    <button class="tab" data-tab="layer6">
+                        <span class="layer-number">Layer 6</span>
+                        Presentation
+                    </button>
+                    <button class="tab" data-tab="layer5">
+                        <span class="layer-number">Layer 5</span>
+                        Session
+                    </button>
+                    <button class="tab" data-tab="layer4">
+                        <span class="layer-number">Layer 4</span>
+                        Transport
+                    </button>
+                    <button class="tab" data-tab="layer3">
+                        <span class="layer-number">Layer 3</span>
+                        Network
+                    </button>
+                    <button class="tab" data-tab="layer2">
+                        <span class="layer-number">Layer 2</span>
+                        Data Link
+                    </button>
+                    <button class="tab" data-tab="layer1">
+                        <span class="layer-number">Layer 1</span>
+                        Physical
+                    </button>
+                </div>
+            </div>
+
+            <div class="content-area">
+                <!-- Layer 7: Application -->
+                <div id="layer7" class="section active">
+                    <div class="section-header">
+                        <h2>
+                            <span class="layer-badge">Layer 7</span>
+                            Application Layer (All)
+                        </h2>
+                        <div class="mnemonic">
+                            <strong>Memory Aid:</strong> <em>"All People Seem To Need Data Processing"</em> - Application is where users interact with the network
+                        </div>
+                    </div>
+
+                    <div class="content-grid">
+                        <div class="main-content">
+                            <h3>Overview</h3>
+                            <p>The Application Layer represents the highest level of the OSI model and is the layer closest to the end user. This is where human-computer interaction occurs through applications like web browsers, email clients, and other software programs.</p>
+
+                            <div class="expandable expanded">
+                                <div class="expandable-header">
+                                    <h4>Key Functions & Services</h4>
+                                    <span class="expand-icon">▼</span>
+                                </div>
+                                <div class="expandable-content">
+                                    <div class="expandable-content-inner">
+                                        <ul>
+                                            <li>Provides interface for user applications</li>
+                                            <li>Enables web browsing, email, file transfers</li>
+                                            <li>Supports database access and remote printing</li>
+                                            <li>Manages network resource sharing</li>
+                                            <li>Directory services and name resolution</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="expandable">
+                                <div class="expandable-header">
+                                    <h4>Common Protocols & Technologies</h4>
+                                    <span class="expand-icon">▼</span>
+                                </div>
+                                <div class="expandable-content">
+                                    <div class="expandable-content-inner">
+                                        <ul>
+                                            <li><strong>HTTP/HTTPS:</strong> Web browsing and secure communications</li>
+                                            <li><strong>SMTP/POP3/IMAP:</strong> Email transmission and retrieval</li>
+                                            <li><strong>FTP:</strong> File transfer protocol</li>
+                                            <li><strong> DNS:</strong> Domain name resolution</li>
+                                            <li><strong> Telnet/SSH:</strong> Remote system access</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="sidebar">
+                            <div class="info-card">
+                                <h3>🎯 Executive Insights</h3>
+                                <p>The Application Layer directly impacts user experience and business productivity. Optimizing application protocols can significantly improve network performance and user satisfaction.</p>
+                            </div>
+
+                            <div class="info-card">
+                                <h3>📊 Impact Metrics</h3>
+                                <ul>
+                                    <li>User Experience Quality</li>
+                                    <li>Application Response Time</li>
+                                    <li>Service Availability</li>
+                                    <li>Data Throughput</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Layer 6: Presentation -->
+                <div id="layer6" class="section">
+                    <div class="section-header">
+                        <h2>
+                            <span class="layer-badge">Layer 6</span>
+                            Presentation Layer (People)
+                        </h2>
+                        <div class="mnemonic">
+                            <strong>Memory Aid:</strong> <em>"All People Seem To Need Data Processing"</em> - Presentation formats data for people to understand
+                        </div>
+                    </div>
+
+                    <div class="content-grid">
+                        <div class="main-content">
+                            <h3>Overview</h3>
+                            <p>The Presentation Layer acts as a translator between the application layer and the network. It ensures that data sent from the application layer of one system can be readable by the application layer of another system.</p>
+
+                            <div class="expandable expanded">
+                                <div class="expandable-header">
+                                    <h4>Core Responsibilities</h4>
+                                    <span class="expand-icon">▼</span>
+                                </div>
+                                <div class="expandable-content">
+                                    <div class="expandable-content-inner">
+                                        <ul>
+                                            <li>Data format translation and conversion</li>
+                                            <li>Character encoding (ASCII, Unicode)</li>
+                                            <li>Data encryption and decryption</li>
+                                            <li>Data compression and decompression</li>
+                                            <li>Graphics and multimedia formatting</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="expandable">
+                                <div class="expandable-header">
+                                    <h4>Key Technologies</h4>
+                                    <span class="expand-icon">▼</span>
+                                </div>
+                                <div class="expandable-content">
+                                    <div class="expandable-content-inner">
+                                        <ul>
+                                            <li><strong>SSL/TLS:</strong> Secure data encryption</li>
+                                            <li><strong>JPEG/GIF:</strong> Image compression</li>
+                                            <li><strong>ASCII/Unicode:</strong> Character encoding</li>
+                                            <li><strong>MPEG:</strong> Video compression</li>
+                                            <li><strong>Gzip:</strong> Data compression</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="sidebar">
+                            <div class="info-card">
+                                <h3>🔐 Security Considerations</h3>
+                                <p>This layer is crucial for data security. Encryption at the presentation layer protects sensitive information during transmission and ensures data integrity.</p>
+                            </div>
+
+                            <div class="info-card">
+                                <h3>🌐 Interoperability</h3>
+                                <ul>
+                                    <li>Cross-platform compatibility</li>
+                                    <li>Standardized data formats</li>
+                                    <li>Protocol independence</li>
+                                    <li>Seamless data exchange</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Layer 5: Session -->
+                <div id="layer5" class="section">
+                    <div class="section-header">
+                        <h2>
+                            <span class="layer-badge">Layer 5</span>
+                            Session Layer (Seem)
+                        </h2>
+                        <div class="mnemonic">
+                            <strong>Memory Aid:</strong> <em>"All People Seem To Need Data Processing"</em> - Sessions seem to manage communication
+                        </div>
+                    </div>
+
+                    <div class="content-grid">
+                        <div class="main-content">
+                            <h3>Overview</h3>
+                            <p>The Session Layer establishes, manages, and terminates connections between applications. It handles session coordination between sending and receiving applications, ensuring proper communication flow.</p>
+
+                            <div class="expandable expanded">
+                                <div class="expandable-header">
+                                    <h4>Session Management Functions</h4>
+                                    <span class="expand-icon">▼</span>
+                                </div>
+                                <div class="expandable-content">
+                                    <div class="expandable-content-inner">
+                                        <ul>
+                                            <li>Establish and terminate sessions</li>
+                                            <li>Dialogue control and synchronization</li>
+                                            <li>Session recovery mechanisms</li>
+                                            <li>Authentication and authorization</li>
+                                            <li>Full-duplex/half-duplex operation</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="expandable">
+                                <div class="expandable-header">
+                                    <h4>Implementation Examples</h4>
+                                    <span class="expand-icon">▼</span>
+                                </div>
+                                <div class="expandable-content">
+                                    <div class="expandable-content-inner">
+                                        <ul>
+                                            <li><strong>NetBIOS:</strong> Session establishment</li>
+                                            <li><strong>RPC:</strong> Remote procedure calls</li>
+                                            <li><strong>SQL sessions:</strong> Database connections</li>
+                                            <li><strong>Web sessions:</strong> Cookie management</li>
+                                            <li><strong>API sessions:</strong> REST/GraphQL tokens</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="sidebar">
+                            <div class="info-card">
+                                <h3>⚡ Performance Impact</h3>
+                                <p>Efficient session management reduces connection overhead and improves application responsiveness, particularly for transaction-intensive applications.</p>
+                            </div>
+
+                            <div class="info-card">
+                                <h3>🔄 Reliability Features</h3>
+                                <ul>
+                                    <li>Session checkpointing</li>
+                                    <li>Automatic recovery</li>
+                                    <li>Connection pooling</li>
+                                    <li>Timeout management</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Layer 4: Transport -->
+                <div id="layer4" class="section">
+                    <div class="section-header">
+                        <h2>
+                            <span class="layer-badge">Layer 4</span>
+                            Transport Layer (To)
+                        </h2>
+                        <div class="mnemonic">
+                            <strong>Memory Aid:</strong> <em>"All People Seem To Need Data Processing"</em> - Transport delivers data to the right place
+                        </div>
+                    </div>
+
+                    <div class="content-grid">
+                        <div class="main-content">
+                            <h3>Overview</h3>
+                            <p>The Transport Layer ensures complete data transfer and provides reliable or unreliable data delivery between endpoints. It's responsible for end-to-end communication, flow control, and error recovery.</p>
+
+                            <div class="expandable expanded">
+                                <div class="expandable-header">
+                                    <h4>Core Protocols: TCP vs UDP</h4>
+                                    <span class="expand-icon">▼</span>
+                                </div>
+                                <div class="expandable-content">
+                                    <div class="expandable-content-inner">
+                                        <h4 style="margin-top: 0;">TCP (Transmission Control Protocol)</h4>
+                                        <ul>
+                                            <li>Connection-oriented service</li>
+                                            <li>Reliable data delivery</li>
+                                            <li>Flow control and congestion control</li>
+                                            <li>Three-way handshake for connection</li>
+                                            <li>Guaranteed delivery and ordering</li>
+                                        </ul>
+                                        <h4>UDP (User Datagram Protocol)</h4>
+                                        <ul>
+                                            <li>Connectionless service</li>
+                                            <li>Fast but unreliable</li>
+                                            <li>No flow control</li>
+                                            <li>No guarantee of delivery</li>
+                                            <li>Low overhead, high speed</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="expandable">
+                                <div class="expandable-header">
+                                    <h4>Key Functions</h4>
+                                    <span class="expand-icon">▼</span>
+                                </div>
+                                <div class="expandable-content">
+                                    <div class="expandable-content-inner">
+                                        <ul>
+                                            <li><strong>Port Management:</strong> Multiplexing/demultiplexing</li>
+                                            <li><strong>Segmentation:</strong> Breaking large data into segments</li>
+                                            <li><strong>Flow Control:</strong> Preventing buffer overflow</li>
+                                            <li><strong>Error Detection:</strong> Checksums and acknowledgments</li>
+                                            <li><strong>Sequencing:</strong> Ensuring proper order</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="sidebar">
+                            <div class="info-card">
+                                <h3>📡 Port Numbers</h3>
+                                <ul>
+                                    <li>HTTP: 80</li>
+                                    <li>HTTPS: 443</li>
+                                    <li>FTP: 21</li>
+                                    <li>SMTP: 25</li>
+                                    <li>DNS: 53</li>
+                                    <li>SSH: 22</li>
+                                </ul>
+                            </div>
+
+                            <div class="info-card">
+                                <h3>🎯 Use Cases</h3>
+                                <p><strong>TCP:</strong> Web browsing, email, file transfers</p>
+                                <p><strong>UDP:</strong> Video streaming, VoIP, gaming, DNS</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Layer 3: Network -->
+                <div id="layer3" class="section">
+                    <div class="section-header">
+                        <h2>
+                            <span class="layer-badge">Layer 3</span>
+                            Network Layer (Need)
+                        </h2>
+                        <div class="mnemonic">
+                            <strong>Memory Aid:</strong> <em>"All People Seem To Need Data Processing"</em> - We need routing to move data
+                        </div>
+                    </div>
+
+                    <div class="content-grid">
+                        <div class="main-content">
+                            <h3>Overview</h3>
+                            <p>The Network Layer provides routing and switching technologies, creating logical paths (virtual circuits) for transmitting data from node to node. Routing and forwarding are the main functions of this layer.</p>
+
+                            <div class="expandable expanded">
+                                <div class="expandable-header">
+                                    <h4>IP Addressing</h4>
+                                    <span class="expand-icon">▼</span>
+                                </div>
+                                <div class="expandable-content">
+                                    <div class="expandable-content-inner">
+                                        <ul>
+                                            <li><strong>IPv4:</strong> 32-bit addressing (e.g., 192.168.1.1)</li>
+                                            <li><strong>IPv6:</strong> 128-bit addressing (e.g., 2001:db8::1)</li>
+                                            <li><strong>Subnetting:</strong> Network segmentation</li>
+                                            <li><strong>NAT:</strong> Network Address Translation</li>
+                                            <li><strong>DHCP:</strong> Dynamic IP assignment</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="expandable">
+                                <div class="expandable-header">
+                                    <h4>Routing Protocols</h4>
+                                    <span class="expand-icon">▼</span>
+                                </div>
+                                <div class="expandable-content">
+                                    <div class="expandable-content-inner">
+                                        <h4 style="margin-top: 0;">Interior Routing (IGP)</h4>
+                                        <ul>
+                                            <li><strong>OSPF:</strong> Open Shortest Path First</li>
+                                            <li><strong>EIGRP:</strong> Enhanced Interior Gateway Routing Protocol</li>
+                                            <li><strong>RIP:</strong> Routing Information Protocol</li>
+                                        </ul>
+                                        <h4>Exterior Routing (EGP)</h4>
+                                        <ul>
+                                            <li><strong>BGP:</strong> Border Gateway Protocol</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="sidebar">
+                            <div class="info-card">
+                                <h3>🌐 Key Devices</h3>
+                                <ul>
+                                    <li><strong>Routers:</strong> Primary layer 3 devices</li>
+                                    <li><strong>Layer 3 Switches:</strong> Hardware routing</li>
+                                    <li><strong>Firewalls:</strong> Traffic filtering</li>
+                                    <li><strong>VPN Gateways:</strong> Secure tunnels</li>
+                                </ul>
+                            </div>
+
+                            <div class="info-card">
+                                <h3>📊 Network Performance</h3>
+                                <p>Efficient routing reduces latency and improves network throughput. Path selection algorithms determine optimal data flow across complex networks.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Layer 2: Data Link -->
+                <div id="layer2" class="section">
+                    <div class="section-header">
+                        <h2>
+                            <span class="layer-badge">Layer 2</span>
+                            Data Link Layer (Data)
+                        </h2>
+                        <div class="mnemonic">
+                            <strong>Memory Aid:</strong> <em>"All People Seem To Need Data Processing"</em> - Data frames are handled at this layer
+                        </div>
+                    </div>
+
+                    <div class="content-grid">
+                        <div class="main-content">
+                            <h3>Overview</h3>
+                            <p>The Data Link Layer provides node-to-node data transfer and detects errors that may occur in the Physical Layer. It handles the physical addressing (MAC addresses) and defines the protocol to establish and terminate connections between two physically connected nodes.</p>
+
+                            <div class="expandable expanded">
+                                <div class="expandable-header">
+                                    <h4>MAC Addressing</h4>
+                                    <span class="expand-icon">▼</span>
+                                </div>
+                                <div class="expandable-content">
+                                    <div class="expandable-content-inner">
+                                        <ul>
+                                            <li>48-bit hardware address (e.g., 00:1A:2B:3C:4D:5E)</li>
+                                            <li>First 24 bits: OUI (Organizationally Unique Identifier)</li>
+                                            <li>Last 24 bits: Device identifier</li>
+                                            <li>Burned into network interface card</li>
+                                            <li>Used for local network communication</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="expandable">
+                                <div class="expandable-header">
+                                    <h4>Data Link Technologies</h4>
+                                    <span class="expand-icon">▼</span>
+                                </div>
+                                <div class="expandable-content">
+                                    <div class="expandable-content-inner">
+                                        <ul>
+                                            <li><strong>Ethernet:</strong> Most common wired technology</li>
+                                            <li><strong>Wi-Fi:</strong> Wireless communication</li>
+                                            <li><strong>Frame Relay:</strong> Legacy WAN technology</li>
+                                            <li><strong>ATM:</strong> Asynchronous Transfer Mode</li>
+                                            <li><strong>PPP:</strong> Point-to-Point Protocol</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="sidebar">
+                            <div class="info-card">
+                                <h3>🔧 Network Devices</h3>
+                                <ul>
+                                    <li><strong>Switches:</strong> Frame forwarding</li>
+                                    <li><strong>Bridges:</strong> Segment connection</li>
+                                    <li><strong>NICs:</strong> Network interfaces</li>
+                                    <li><strong>APs:</strong> Wireless access points</li>
+                                </ul>
+                            </div>
+
+                            <div class="info-card">
+                                <h3>✅ Error Detection</h3>
+                                <p>CRC (Cyclic Redundancy Check) ensures data integrity. Frame check sequences detect corrupted transmissions and trigger retransmission.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Layer 1: Physical -->
+                <div id="layer1" class="section">
+                    <div class="section-header">
+                        <h2>
+                            <span class="layer-badge">Layer 1</span>
+                            Physical Layer (Processing)
+                        </h2>
+                        <div class="mnemonic">
+                            <strong>Memory Aid:</strong> <em>"All People Seem To Need Data Processing"</em> - Physical processing of bits
+                        </div>
+                    </div>
+
+                    <div class="content-grid">
+                        <div class="main-content">
+                            <h3>Overview</h3>
+                            <p>The Physical Layer is responsible for the physical connection between devices. It defines the electrical, mechanical, procedural, and functional specifications for activating, maintaining, and deactivating physical links between end systems.</p>
+
+                            <div class="expandable expanded">
+                                <div class="expandable-header">
+                                    <h4>Transmission Media Types</h4>
+                                    <span class="expand-icon">▼</span>
+                                </div>
+                                <div class="expandable-content">
+                                    <div class="expandable-content-inner">
+                                        <h4 style="margin-top: 0;">Wired (Guided) Media</h4>
+                                        <ul>
+                                            <li><strong>Twisted Pair:</strong> UTP/STP (Cat5e, Cat6, Cat6a)</li>
+                                            <li><strong>Coaxial:</strong> RG-59, RG-6 for cable TV</li>
+                                            <li><strong>Fiber Optic:</strong> Single-mode and multi-mode</li>
+                                        </ul>
+                                        <h4>Wireless (Unguided) Media</h4>
+                                        <ul>
+                                            <li><strong>Radio Waves:</strong> Wi-Fi, Bluetooth</li>
+                                            <li><strong>Microwave:</strong> Satellite, point-to-point</li>
+                                            <li><strong>Infrared:</strong> Short-range communication</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="expandable">
+                                <div class="expandable-header">
+                                    <h4>Signal Characteristics</h4>
+                                    <span class="expand-icon">▼</span>
+                                </div>
+                                <div class="expandable-content">
+                                    <div class="expandable-content-inner">
+                                        <ul>
+                                            <li><strong>Analog vs Digital:</strong> Signal types</li>
+                                            <li><strong>Modulation:</strong> AM, FM, PSK, QAM</li>
+                                            <li><strong>Bandwidth:</strong> Data transmission capacity</li>
+                                            <li><strong>Throughput:</strong> Actual data rate</li>
+                                            <li><strong>Latency:</strong> Signal propagation delay</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="sidebar">
+                            <div class="info-card">
+                                <h3>🔌 Physical Devices</h3>
+                                <ul>
+                                    <li><strong>Hubs:</strong> Signal repeaters</li>
+                                    <li><strong>Repeaters:</strong> Signal amplifiers</li>
+                                    <li><strong>Transceivers:</strong> Signal converters</li>
+                                    <li><strong>Media Converters:</strong> Type adapters</li>
+                                    <li><strong>Modems:</strong> Digital-analog converters</li>
+                                </ul>
+                            </div>
+
+                            <div class="info-card">
+                                <h3>⚡ Standards</h3>
+                                <ul>
+                                    <li><strong>Ethernet:</strong> IEEE 802.3</li>
+                                    <li><strong>Wi-Fi:</strong> IEEE 802.11</li>
+                                    <li><strong>Bluetooth:</strong> IEEE 802.15.1</li>
+                                    <li><strong>Token Ring:</strong> IEEE 802.5</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Summary Section -->
+                <div class="summary-section">
+                    <h3>📊 OSI Model Executive Summary</h3>
+                    <div class="chart-container">
+                        <div class="chart-wrapper">
+                            <canvas id="osiChart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="key-points">
+                        <div class="key-point">
+                            <h4>Layer Architecture</h4>
+                            <p>7-layer modular design enables separation of concerns and protocol independence, facilitating network troubleshooting and development.</p>
+                        </div>
+                        <div class="key-point">
+                            <h4>Protocol Stack</h4>
+                            <p>Each layer builds upon services below, creating a comprehensive protocol stack that handles all aspects of network communication.</p>
+                        </div>
+                        <div class="key-point">
+                            <h4>Interoperability</h4>
+                            <p>Standardized layers ensure different vendor equipment can communicate seamlessly, promoting global network connectivity.</p>
+                        </div>
+                        <div class="key-point">
+                            <h4>Troubleshooting</h4>
+                            <p>Layer-based approach simplifies network diagnostics by isolating issues to specific protocol levels.</p>
+                        </div>
+                        <div class="key-point">
+                            <h4>Scalability</h4>
+                            <p>Modular design supports network growth and technology evolution without requiring complete system redesigns.</p>
+                        </div>
+                        <div class="key-point">
+                            <h4>Security Framework</h4>
+                            <p>Multiple layers provide defense-in-depth security model with protection at various protocol levels.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize chart instances storage
+        if (!window.chartInstances) {
+            window.chartInstances = {};
+        }
+
+        // Tab switching functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Initializing OSI Model Report...');
+            
+            const tabs = document.querySelectorAll('.tab');
+            const sections = document.querySelectorAll('.section');
+            
+            // Tab click handler
+            tabs.forEach(tab => {
+                tab.addEventListener('click', function() {
+                    const targetId = this.getAttribute('data-tab');
+                    
+                    // Remove active class from all tabs and sections
+                    tabs.forEach(t => t.classList.remove('active'));
+                    sections.forEach(s => s.classList.remove('active'));
+                    
+                    // Add active class to clicked tab and corresponding section
+                    this.classList.add('active');
+                    const targetSection = document.getElementById(targetId);
+                    if (targetSection) {
+                        targetSection.classList.add('active');
+                        console.log(`Switched to ${targetId}`);
+                        
+                        // Initialize chart when summary section becomes visible
+                        if (targetId === 'layer1' && !window.chartInstances.osiChart) {
+                            initializeChart();
+                        }
+                    }
+                });
+            });
+            
+            // Expandable sections
+            const expandables = document.querySelectorAll('.expandable-header');
+            expandables.forEach(header => {
+                header.addEventListener('click', function() {
+                    const expandable = this.parentElement;
+                    expandable.classList.toggle('expanded');
+                });
+            });
+            
+            // Initialize MathJax
+            if (typeof MathJax !== 'undefined') {
+                MathJax.typesetPromise().then(() => {
+                    console.log('MathJax rendering complete');
+                }).catch(err => {
+                    console.log('MathJax error:', err);
+                });
+            }
+            
+            // Window resize handler for charts
+            let resizeTimeout;
+            window.addEventListener('resize', function() {
+                clearTimeout(resizeTimeout);
+                resizeTimeout = setTimeout(function() {
+                    Object.values(window.chartInstances).forEach(chart => {
+                        if (chart) {
+                            chart.resize();
+                        }
+                    });
+                }, 250);
+            });
+            
+            console.log('OSI Model Report initialized successfully');
+        });
+
+        // Chart initialization function
+        function initializeChart() {
+            try {
+                const ctx = document.getElementById('osiChart');
+                if (!ctx) {
+                    console.error('Chart canvas not found');
+                    return;
+                }
+                
+                window.chartInstances.osiChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: ['Application', 'Presentation', 'Session', 'Transport', 'Network', 'Data Link', 'Physical'],
+                        datasets: [{
+                            label: 'OSI Layer',
+                            data: [7, 6, 5, 4, 3, 2, 1],
+                            backgroundColor: [
+                                'rgba(199, 102, 241, 0.8)',
+                                'rgba(239, 92, 246, 0.8)',
+                                'rgba(267, 139, 250, 0.8)',
+                                'rgba(296, 181, 253, 0.8)',
+                                'rgba(221, 214, 254, 0.8)',
+                                'rgba(237, 233, 254, 0.8)',
+                                'rgba(245, 243, 255, 0.8)'
+                            ],
+                            borderColor: [
+                                'rgb(199, 102, 241)',
+                                'rgb(239, 92, 246)',
+                                'rgb(267, 139, 250)',
+                                'rgb(296, 181, 253)',
+                                'rgb(221, 214, 254)',
+                                'rgb(237, 233, 254)',
+                                'rgb(245, 243, 255)'
+                            ],
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        indexAxis: 'y',
+                        plugins: {
+                            legend: {
+                                display: false
+                            },
+                            title: {
+                                display: true,
+                                text: 'OSI Model Layer Hierarchy',
+                                font: {
+                                    size: 16,
+                                    weight: 'bold'
+                                },
+                                padding: 20
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        const layerNames = {
+                                            7: 'Application (User Interface)',
+                                            6: 'Presentation (Data Formatting)',
+                                            5: 'Session (Communication Management)',
+                                            4: 'Transport (End-to-End Delivery)',
+                                            3: 'Network (Routing)',
+                                            2: 'Data Link (Frame Transfer)',
+                                            1: 'Physical (Signal Transmission)'
+                                        };
+                                        return layerNames[context.raw] || `Layer ${context.raw}`;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                beginAtZero: true,
+                                max: 8,
+                                ticks: {
+                                    stepSize: 1,
+                                    callback: function(value) {
+                                        if (value > 0 && value <= 7) {
+                                            return 'Layer ' + value;
+                                        }
+                                        return '';
+                                    }
+                                },
+                                title: {
+                                    display: true,
+                                    text: 'Layer Number (7 = Highest, 1 = Lowest)'
+                                }
+                            },
+                            y: {
+                                ticks: {
+                                    font: {
+                                        size: 12
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+                
+                console.log('OSI Chart initialized successfully');
+            } catch (error) {
+                console.error('Error initializing chart:', error);
+            }
+        }
+
+        // Initialize chart on page load
+        window.addEventListener('load', function() {
+            // Small delay to ensure DOM is fully loaded
+            setTimeout(initializeChart, 100);
+        });
+    </script>
+<script>window.parent.postMessage({ action: "ready" }, "*"); 
+ 
+window.console = new Proxy(console, {
+  get(target, prop) {
+    if (['log', 'warn', 'error'].includes(prop)) {
+      return new Proxy(target[prop], {
+        apply(fn, thisArg, args) {
+          fn.apply(thisArg, args);
+          window.parent.postMessage({ action: 'console', 
+            type: prop, 
+            args: args.map((arg) => {
+              try {
+                return JSON.stringify(arg).replace(/^["']|["']$/g, '');
+              } catch (e) {
+                return arg;
+              }
+            }) 
+          }, '*');
+        }
+      });
+    }
+    return target[prop];
+  }
+});
+</script></body>
+</html>

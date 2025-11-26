@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firewall ACL and UTM Rule Processing Simulator</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Consolas', 'Courier New', monospace;
+            background: linear-gradient(180deg, #353636 50%, #032a36 75%);
+            min-height: 100vh;
+        }
+        a {
+            display: block;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            text-align: center;
+        }
+        .card {
+            border-radius: 1rem;
+            background-color: #ffffff;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.06);
+            padding: 1.5rem;
+            border-left: 5px solid;
+            transition: all 0.3s ease;
+        }
+        .log-container {
+            height: 400px;
+            overflow-y: auto;
+            background-color: #1f2937; /* Gray 800 */
+            color: #97999c; /* Gray 300 */
+            font-family: 'Consolas', 'Courier New', monospace;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            font-size: 0.875rem;
+        }
+        .deny-match { color: #f87171; font-weight: bold; } /* Red */
+        .permit-match { color: #4ade80; font-weight: bold; } /* Green */
+        .system-info { color: #facc15; } /* Yellow */
+        .packet-info { color: #3b82f6; } /* Blue */
+        
+        .rule-row:nth-child(even) { background-color: #f3f4f6; }
+        .rule-header { background-color: #0f2438; color: white; }
+    </style>
+</head>
+<body class="p-4 md:p-10 min-h-screen">
+
+    <div class="max-w-7xl mx-auto">
+        <h1 class="text-4xl font-extrabold text-orange-500 mb-2 text-center">
+            Firewall & UTM ACL Processing Simulation
+        </h1>
+        <p class="text-lg text-white mb-8 text-center">
+            Simulating how a firewall evaluates network traffic packets against an ordered Access Control List (ACL).
+        </p>
+        <p class="text-sm text-yellow-500 mb-8 text-center">
+            Press F5 or Reload/Refresh Browser to Reset Simulation.
+        </p>
+        <a id="link" class="text-sm hover:text-lime-500 text-yellow-200 mb-8 text-center" href="index.html">
+            Back to Simulations Index
+        </a>
+        
+        <!-- Explanation and Image -->
+        <div class="card border-purple-600 mb-8">
+            <h2 class="text-2xl font-semibold text-pink-800 mb-3">ACL Logic: Top-Down Matching</h2>
+            <p class="text-gray-700 mb-4">
+                ACLs are lists of rules processed sequentially (top-down). As soon as a packet matches a rule, the corresponding action (PERMIT or DENY) is taken, and **no further rules are checked**. The final, unwritten rule is the **Implicit Deny**.
+            </p>
+            
+        </div>
+
+        <!-- Main Simulation Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            <!-- ACL Rules Panel -->
+            <div class="card border-pink-600 lg:col-span-1">
+                <h3 class="text-2xl font-bold text-purple-800 mb-4">Current ACL Rules</h3>
+                <div class="rounded-lg overflow-hidden border">
+                    <table class="w-full text-left text-sm">
+                        <thead>
+                            <tr class="rule-header">
+                                <th class="p-2 w-10">#</th>
+                                <th class="p-2 w-20">Action</th>
+                                <th class="p-2">Source IP</th>
+                                <th class="p-2">Protocol</th>
+                                <th class="p-2">Dst. Port</th>
+                            </tr>
+                        </thead>
+                        <tbody id="acl-table-body">
+                            <!-- Rules populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+                <div class="mt-4 p-3 bg-red-100 text-red-800 rounded-lg text-sm font-medium">
+                    <p class="font-bold">Rule 5: Implicit Deny (Unwritten Rule)</p>
+                    <p>Action: DENY ALL. If no explicit rule above is matched, the packet is dropped.</p>
+                </div>
+                
+                <button id="run-simulation-button" onclick="runSimulation()" class="w-full mt-6 bg-lime-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg shadow-md transition duration-150">
+                    Run ACL Simulation
+                </button>
+            </div>
+
+            <!-- Network Log Panel -->
+            <div class="card border-gray-400 lg:col-span-2">
+                <h3 class="text-2xl font-bold text-gray-800 mb-4">Packet Processing Log</h3>
+                <div id="log" class="log-container">
+                    <p class="system-info">System: Click 'Run ACL Simulation' to send test packets through the firewall.</p>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        // --- 1. Define the ACL Rules (The Firewall Configuration) ---
+        const aclRules = [
+            // Rule 1: Permit specific secure access from the management station
+            { action: 'PERMIT', srcIp: '192.168.1.10', protocol: 'TCP', dstPort: 22, description: 'Allow SSH from management host' },
+            
+            // Rule 2: Deny all HTTP traffic from any internal network (forcing HTTPS or blocking web browsing)
+            { action: 'DENY', srcIp: 'any', protocol: 'TCP', dstPort: 80, description: 'Block all insecure HTTP traffic' },
+
+            // Rule 3: Permit general web access (HTTPS) for the rest of the network
+            { action: 'PERMIT', srcIp: 'any', protocol: 'TCP', dstPort: 443, description: 'Allow general secure HTTPS access' },
+            
+            // Rule 4: Permit internal DNS queries
+            { action: 'PERMIT', srcIp: 'any', protocol: 'UDP', dstPort: 53, description: 'Allow DNS queries' },
+        ];
+
+        // --- 2. Define Sample Traffic (The Network Packets) ---
+        const trafficData = [
+            { srcIp: '192.168.1.10', protocol: 'TCP', dstPort: 22, description: 'Packet A: SSH from Management Host' },
+            { srcIp: '192.168.1.50', protocol: 'TCP', dstPort: 80, description: 'Packet B: Insecure HTTP from standard workstation' },
+            { srcIp: '10.0.0.15', protocol: 'TCP', dstPort: 443, description: 'Packet C: Secure HTTPS request' },
+            { srcIp: '172.16.0.20', protocol: 'ICMP', dstPort: null, description: 'Packet D: PING request (ICMP)' },
+            { srcIp: '192.168.1.10', protocol: 'TCP', dstPort: 80, description: 'Packet E: Insecure HTTP from Management Host' },
+            { srcIp: '10.0.0.1', protocol: 'UDP', dstPort: 53, description: 'Packet F: DNS Query' },
+        ];
+
+        // --- 3. DOM Elements and Setup ---
+        const log = document.getElementById('log');
+        const aclTableBody = document.getElementById('acl-table-body');
+        const runButton = document.getElementById('run-simulation-button');
+
+        // Function to render the static ACL table
+        function renderAclTable() {
+            aclTableBody.innerHTML = aclRules.map((rule, index) => `
+                <tr class="rule-row text-gray-700">
+                    <td class="p-2 font-bold">${index + 1}</td>
+                    <td class="p-2 font-bold ${rule.action === 'PERMIT' ? 'text-green-600' : 'text-red-600'}">${rule.action}</td>
+                    <td class="p-2 font-mono">${rule.srcIp}</td>
+                    <td class="p-2">${rule.protocol}</td>
+                    <td class="p-2">${rule.dstPort !== null ? rule.dstPort : 'Any'}</td>
+                </tr>
+            `).join('');
+        }
+
+        /** Logs a message to the simulation console with appropriate styling. */
+        function logMessage(text, className = '') {
+            const entry = document.createElement('p');
+            entry.className = className;
+            entry.textContent = `> ${text}`;
+            log.appendChild(entry);
+            log.scrollTop = log.scrollHeight;
+        }
+
+        // --- 4. The Core Simulation Logic ---
+
+        /** Simulates the processing of a single packet against the ACL. */
+        function simulatePacket(packet, packetIndex) {
+            logMessage(`\n--- Packet ${String.fromCharCode(65 + packetIndex)}: ${packet.description} ---`, 'packet-info font-extrabold text-lg mt-3');
+            logMessage(`Source IP: ${packet.srcIp} | Protocol: ${packet.protocol} | Dst Port: ${packet.dstPort || 'N/A'}`);
+
+            let matched = false;
+            let finalAction = 'DENY (Implicit)';
+            let matchedRuleIndex = aclRules.length + 1;
+
+            // Loop through each rule sequentially
+            for (let i = 0; i < aclRules.length; i++) {
+                const rule = aclRules[i];
+                const ruleNum = i + 1;
+                
+                logMessage(`  Checking Rule ${ruleNum}: ${rule.description}`, 'text-gray-500');
+
+                // Check Source IP
+                const srcIpMatch = (rule.srcIp === 'any' || rule.srcIp === packet.srcIp);
+                
+                // Check Protocol
+                const protocolMatch = (rule.protocol === 'any' || rule.protocol === packet.protocol);
+                
+                // Check Destination Port
+                const dstPortMatch = (rule.dstPort === null || rule.dstPort === packet.dstPort);
+
+                // Check for a complete match
+                if (srcIpMatch && protocolMatch && dstPortMatch) {
+                    finalAction = rule.action;
+                    matchedRuleIndex = ruleNum;
+                    matched = true;
+                    logMessage(`  MATCH FOUND on Rule ${ruleNum}! Action: ${finalAction}.`, rule.action === 'PERMIT' ? 'permit-match' : 'deny-match');
+                    break; // CRITICAL: Stop processing immediately upon first match
+                } else {
+                    logMessage('  No match. Moving to next rule.', 'text-gray-500');
+                }
+            }
+
+            // After the loop, apply the result
+            if (!matched) {
+                logMessage(`  No rules matched. Applying Rule ${matchedRuleIndex}: IMPLICIT DENY.`, 'deny-match');
+                logMessage(`  FINAL RESULT for Packet ${String.fromCharCode(65 + packetIndex)}: DENIED (Implicit Deny).`, 'deny-match text-lg');
+            } else {
+                logMessage(`  FINAL RESULT for Packet ${String.fromCharCode(65 + packetIndex)}: ${finalAction} by Rule ${matchedRuleIndex}.`, finalAction === 'PERMIT' ? 'permit-match text-lg' : 'deny-match text-lg');
+            }
+            logMessage(`--------------------------------------------------`, 'system-info');
+        }
+
+        /** Runs the full simulation for all traffic data. */
+        function runSimulation() {
+            log.innerHTML = '';
+            runButton.disabled = true;
+            runButton.textContent = 'Processing...';
+
+            let i = 0;
+            function processNextPacket() {
+                if (i < trafficData.length) {
+                    simulatePacket(trafficData[i], i);
+                    i++;
+                    // Introduce a delay to visualize the step-by-step process
+                    setTimeout(processNextPacket, 1500); 
+                } else {
+                    logMessage('Simulation Complete. All packets processed.', 'system-info text-xl font-bold mt-5');
+                    runButton.disabled = false;
+                    runButton.textContent = 'Run ACL Simulation Again';
+                }
+            }
+            processNextPacket();
+        }
+
+        // Initialize on load
+        window.onload = function() {
+            renderAclTable();
+        };
+
+    </script>
+</body>
+</html>

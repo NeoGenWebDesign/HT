@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VLAN Logic Simulator</title>
+    <style>
+        :root {
+            --bg: #4e4848;
+            --switch-color: #334155;
+            --vlan10-color: #2563eb; /* Blue */
+            --vlan20-color: #ff00dd; /* Orange */
+            --vlan30-color: #19f811; /* Green */
+            --text: #1e293b;
+        }
+
+        body {
+            font-family: 'Consolas', 'Courier New', monospace;
+            background: linear-gradient(180deg, #353636 50%, #032a36 75%);
+            min-height: 100vh;
+            color: var(--text);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        a {
+            display: block;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            text-align: center;
+            color:#ffffff;
+        }
+
+        h1 { margin-bottom: 5px; color:#e69b12 }
+        p.desc { max-width: 600px; text-align: center; color: #ffffff; margin-bottom: 30px; }
+
+        /* --- Network Diagram --- */
+        .network-container {
+            position: relative;
+            width: 800px;
+            height: 450px;
+            background: rgb(144, 155, 151);
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* The Central Switch */
+        .switch-device {
+            width: 200px;
+            height: 80px;
+            background: var(--switch-color);
+            color: rgb(233, 172, 4);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border-radius: 4px;
+            z-index: 10;
+            font-weight: bold;
+            position: absolute;
+            top: 40%;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+
+        .switch-ports {
+            display: flex;
+            gap: 10px;
+            margin-top: 40px; /* Visual placement of ports on switch */
+            justify-content: center;
+        }
+        
+        .port-led { 
+            width: 10px; 
+            height: 5px; 
+            background: #00ff00; 
+            border-radius: 4px;
+            box-shadow: 0 0 5px #e0f005; 
+        }
+
+        /* End Devices (PCs) */
+        .device {
+            position: absolute;
+            width: 120px;
+            padding: 10px;
+            background: rgb(34, 31, 31);
+            border: 5px solid #a72626;
+            border-radius: 8px;
+            text-align: center;
+            transition: all 0.3s;
+            z-index: 10;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+
+        .device-icon { 
+            font-size: 2rem; 
+            display: block; margin-bottom: 50px;
+            background-color: #1e293b;
+         }
+        .device-name { 
+            font-weight: bold; 
+            display: block; 
+            margin-bottom: 3px; 
+            color: #464040;
+        }
+        .device-ip { 
+            font-size: 0.8rem; 
+            color: #666; 
+        }
+        .pingbut {
+            margin-top: 10px;
+            color: rgb(238, 205, 21);
+            background: #2d2c33;
+            border-color: #7c7e05;
+            border: 4px solid;
+        }
+
+        /* Positions */
+        #pc1 { top: 30px; left: 50px; }
+        #pc2 { top: 30px; right: 50px; }
+        #pc3 { bottom: 30px; left: 50px; }
+        #pc4 { bottom: 30px; right: 50px; }
+
+        /* VLAN Styling (Dynamic Classes) */
+        .vlan-10 { border-color: var(--vlan10-color); background-color: #eff6ff; }
+        .vlan-10::after { content: "VLAN 10 (Sales)"; display: block; font-size: 0.7rem; color: var(--vlan10-color); font-weight: bold; margin-top: 5px;}
+        
+        .vlan-20 { border-color: var(--vlan20-color); background-color: #fff7ed; }
+        .vlan-20::after { content: "VLAN 20 (Eng)"; display: block; font-size: 0.7rem; color: var(--vlan20-color); font-weight: bold; margin-top: 5px;}
+        
+        .vlan-30 { border-color: var(--vlan30-color); background-color: #f0fdf4; }
+        .vlan-30::after { content: "VLAN 30 (Mgmt)"; display: block; font-size: 0.7rem; color: var(--vlan30-color); font-weight: bold; margin-top: 5px;}
+
+        /* Cables (SVG Lines) */
+        svg.cables {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 1;
+            pointer-events: none;
+        }
+        line { stroke: #cbd5e1; stroke-width: 4; }
+
+        /* The Packet */
+        #packet {
+            position: absolute;
+            width: 15px; height: 15px;
+            background-color: #c00e0e;
+            border-radius: 50%;
+            z-index: 20;
+            opacity: 0;
+            transition: top 0.5s linear, left 0.5s linear, opacity 0.2s;
+            box-shadow: 0 0 5px rgba(0,0,0,0.5);
+        }
+
+        /* --- Controls Area --- */
+        .controls {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+            align-items: flex-end;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+
+        .control-group { display: flex; flex-direction: column; gap: 5px; }
+        label { font-size: 0.9rem; font-weight: bold; }
+        select { padding: 8px; border-radius: 4px; border: 1px solid #ccc; }
+        
+        button {
+            padding: 10px 20px;
+            background: var(--switch-color);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        button:hover { background: #1e293b; }
+
+        /* Log Console */
+        .console {
+            width: 800px;
+            height: 150px;
+            background: #262f46;
+            color: #33ff33;
+            font-family: 'Courier New', Courier, monospace;
+            padding: 15px;
+            border-radius: 8px;
+            overflow-y: auto;
+            font-size: 0.9rem;
+        }
+        .log-line { border-bottom: 1px solid #353941; padding: 2px 0; }
+        .log-error { color: #ff5555; }
+        .log-success { color: #4ade80; }
+        .log-info { color: #fafaf7; }
+
+    </style>
+</head>
+<body>
+
+    <h1>VLAN Segmentation Simulator</h1>
+    <p class="desc">Configure the VLAN ID for each Switch Port. Try to communicate between devices. Observe how the switch permits or denies traffic based on VLAN tags.</p>
+    <p class=" desc text-sm text-yellow-500 mb-8 text-center">
+            Press F5 or Reload/Refresh Browser to Reset Simulation.
+        </p>
+        <a id="link" class="text-sm hover:text-lime-500 text-yellow-200 mb-8 text-center" href="index.html">
+            Back to Simulations Index
+        </a>
+
+    <div class="controls">
+        <div class="control-group">
+            <label>PC 1 VLAN</label>
+            <select id="sel-pc1" onchange="updateVlans()">
+                <option value="10">VLAN 10 (Sales)</option>
+                <option value="20">VLAN 20 (Eng)</option>
+                <option value="30">VLAN 30 (Mgmt)</option>
+            </select>
+        </div>
+        <div class="control-group">
+            <label>PC 2 VLAN</label>
+            <select id="sel-pc2" onchange="updateVlans()">
+                <option value="10">VLAN 10 (Sales)</option>
+                <option value="20" selected>VLAN 20 (Eng)</option>
+                <option value="30">VLAN 30 (Mgmt)</option>
+            </select>
+        </div>
+        <div class="control-group">
+            <label>PC 3 VLAN</label>
+            <select id="sel-pc3" onchange="updateVlans()">
+                <option value="10" selected>VLAN 10 (Sales)</option>
+                <option value="20">VLAN 20 (Eng)</option>
+                <option value="30">VLAN 30 (Mgmt)</option>
+            </select>
+        </div>
+        <div class="control-group">
+            <label>PC 4 VLAN</label>
+            <select id="sel-pc4" onchange="updateVlans()">
+                <option value="10">VLAN 10 (Sales)</option>
+                <option value="20">VLAN 20 (Eng)</option>
+                <option value="30">VLAN 30 (Mgmt)</option>
+            </select>
+        </div>
+        <div class="control-group" style="margin-left: 20px; padding-left: 20px; border-left: 1px solid #ccc;">
+            <label>Test Connection</label>
+            <div style="display: flex; gap: 5px;">
+                <select id="source">
+                    <option value="pc1">PC 1</option>
+                    <option value="pc2">PC 2</option>
+                    <option value="pc3">PC 3</option>
+                    <option value="pc4">PC 4</option>
+                </select>
+                <span>to</span>
+                <select id="dest">
+                    <option value="pc1">PC 1</option>
+                    <option value="pc2" selected>PC 2</option>
+                    <option value="pc3">PC 3</option>
+                    <option value="pc4">PC 4</option>
+                </select>
+            </div>
+        </div>
+        <button class="pingbut" onclick="sendPacket()">PING</button>
+    </div>
+
+    
+
+    <div class="network-container">
+        <svg class="cables">
+            <line x1="110" y1="70" x2="400" y2="225" /> <line x1="690" y1="70" x2="400" y2="225" /> <line x1="110" y1="380" x2="400" y2="225" /> <line x1="690" y1="380" x2="400" y2="225" /> </svg>
+
+        <div class="switch-device" id="switch">
+            <div>
+                LAYER 2 SWITCH
+                <div class="switch-ports">
+                    <div class="port-led"></div>
+                    <div class="port-led"></div>
+                    <div class="port-led"></div>
+                    <div class="port-led"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="device" id="pc1">
+            <span class="device-icon">🖥️</span>
+            <span class="device-name">PC 1</span>
+            <span class="device-ip">192.168.1.10</span>
+        </div>
+
+        <div class="device" id="pc2">
+            <span class="device-icon">🖥️</span>
+            <span class="device-name">PC 2</span>
+            <span class="device-ip">192.168.1.20</span>
+        </div>
+
+        <div class="device" id="pc3">
+            <span class="device-icon">🖥️</span>
+            <span class="device-name">PC 3</span>
+            <span class="device-ip">192.168.1.30</span>
+        </div>
+
+        <div class="device" id="pc4">
+            <span class="device-icon">🖥️</span>
+            <span class="device-name">PC 4</span>
+            <span class="device-ip">192.168.1.40</span>
+        </div>
+
+        <div id="packet"></div>
+    </div>
+
+    <div class="console" id="console">
+        <div class="log-line">Switch booted. Loading VLAN Config...</div>
+    </div>
+
+    <script>
+        // Coordinates for animation (Approximate based on CSS positions)
+        const positions = {
+            pc1: { top: 70, left: 110 },
+            pc2: { top: 70, left: 690 },
+            pc3: { top: 380, left: 110 },
+            pc4: { top: 380, left: 690 },
+            switch: { top: 225, left: 400 }
+        };
+
+        const packet = document.getElementById('packet');
+        const consoleDiv = document.getElementById('console');
+        let isAnimating = false;
+
+        // Initialize Colors on Load
+        updateVlans();
+
+        function log(msg, type="normal") {
+            const line = document.createElement('div');
+            line.classList.add('log-line');
+            if(type === 'error') line.classList.add('log-error');
+            if(type === 'success') line.classList.add('log-success');
+            if(type === 'info') line.classList.add('log-info');
+            line.innerText = "> " + msg;
+            consoleDiv.prepend(line);
+        }
+
+        function updateVlans() {
+            const devices = ['pc1', 'pc2', 'pc3', 'pc4'];
+            devices.forEach(dev => {
+                const el = document.getElementById(dev);
+                const vlan = document.getElementById('sel-' + dev).value;
+                
+                // Reset classes
+                el.classList.remove('vlan-10', 'vlan-20', 'vlan-30');
+                // Add new class
+                el.classList.add('vlan-' + vlan);
+            });
+        }
+
+        function getVlan(pcId) {
+            return document.getElementById('sel-' + pcId).value;
+        }
+
+        async function sendPacket() {
+            if(isAnimating) return;
+            isAnimating = true;
+
+            const src = document.getElementById('source').value;
+            const dst = document.getElementById('dest').value;
+
+            if (src === dst) {
+                log("Source and Destination are the same device.", "error");
+                isAnimating = false;
+                return;
+            }
+
+            const srcVlan = getVlan(src);
+            const dstVlan = getVlan(dst);
+
+            // 1. Setup Packet at Source
+            packet.style.transition = 'none';
+            packet.style.top = positions[src].top + 'px';
+            packet.style.left = positions[src].left + 'px';
+            packet.style.opacity = 1;
+            
+            // Color packet based on VLAN
+            const colors = { '10': '#2563eb', '20': '#ea580c', '30': '#16a34a' };
+            packet.style.backgroundColor = colors[srcVlan];
+
+            log(`Frame created at ${src.toUpperCase()}. Tagged VLAN ID: ${srcVlan}`, "info");
+
+            // 2. Move to Switch
+            await new Promise(r => setTimeout(r, 100)); // slight delay
+            packet.style.transition = 'top 1s linear, left 1s linear';
+            packet.style.top = positions.switch.top + 'px';
+            packet.style.left = positions.switch.left + 'px';
+
+            await new Promise(r => setTimeout(r, 1000)); // Wait for travel
+
+            // 3. Switch Logic
+            log(`Switch received frame on Port ${src.toUpperCase().replace('PC','0')}. Reading 802.1Q Tag...`);
+
+            if (srcVlan === dstVlan) {
+                // SUCCESS SCENARIO
+                log(`MATCH: Dest ${dst.toUpperCase()} is also in VLAN ${srcVlan}. Forwarding...`, "success");
+                
+                packet.style.top = positions[dst].top + 'px';
+                packet.style.left = positions[dst].left + 'px';
+
+                await new Promise(r => setTimeout(r, 1000));
+                log(`PING SUCCESSFUL: ${src.toUpperCase()} <--> ${dst.toUpperCase()}`, "success");
+
+            } else {
+                // FAILURE SCENARIO
+                log(`MISMATCH: Dest ${dst.toUpperCase()} is in VLAN ${dstVlan}. Source is VLAN ${srcVlan}.`, "error");
+                log(`ACTION: Dropping frame to enforce segmentation.`, "error");
+                
+                // Visual "Drop" animation
+                packet.style.backgroundColor = 'red';
+                packet.style.transform = 'scale(2)';
+                packet.style.opacity = 0;
+                await new Promise(r => setTimeout(r, 500));
+                packet.style.transform = 'scale(1)';
+            }
+
+            // Reset
+            packet.style.opacity = 0;
+            isAnimating = false;
+        }
+    </script>
+</body>
+</html>

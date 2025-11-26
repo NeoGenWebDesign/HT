@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DNS Query Resolution Simulator</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Consolas', 'Courier New', monospace;
+            background: linear-gradient(180deg, #353636 50%, #032a36 75%);
+            min-height: 100vh;
+        }
+        a {
+            display: block;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            text-align: center;
+        }
+        .container-card {
+            background-color: white;
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+            padding: 2rem;
+            transition: all 0.3s ease;
+            border-left: 4px solid;
+        }
+        .terminal {
+            background-color: #0f172a; /* Slate 900 */
+            color: #10b981; /* Emerald 500 */
+            font-family: 'Consolas', 'Courier New', monospace;
+            border-radius: 0.75rem;
+            padding: 1rem;
+            font-size: 1rem;
+        }
+        .log-container {
+            height: 450px;
+            overflow-y: auto;
+            background-color: #1e293b; /* Slate 800 */
+            color: #e2e8f0; /* Slate 200 */
+            font-family: 'Consolas', 'Courier New', monospace;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            font-size: 0.9rem;
+            line-height: 1.4;
+        }
+        .log-stage { color: #f97316; font-weight: bold; } /* Orange */
+        .log-info { color: #94a3b8; } /* Slate 400 */
+        .log-query { color: #3b82f6; } /* Blue */
+        .log-response { color: #22c55e; } /* Green */
+        .log-cache { color: #facc15; font-weight: bold; } /* Yellow */
+        .log-success { color: #06b6d4; font-weight: bold; } /* Cyan */
+        
+        .server-box {
+            background-color: #eff6ff; /* Blue 50 */
+            border: 1px solid #bfdbfe; /* Blue 200 */
+            border-radius: 0.5rem;
+            padding: 0.75rem;
+            margin-bottom: 1rem;
+        }
+        .server-box strong {
+            color: #1d4ed8; /* Blue 700 */
+        }
+    </style>
+</head>
+<body class="p-4 md:p-10 min-h-screen">
+
+    <div class="max-w-6xl mx-auto">
+        <h1 class="text-4xl font-extrabold text-orange-500 mb-2 text-center">
+            DNS Query Resolution Simulator
+        </h1>
+        <p class="text-lg text-white mb-8 text-center">
+            Follow the 8 steps required to resolve a fully qualified domain name (FQDN).
+        </p>
+        <p class="text-sm text-yellow-500 mb-8 text-center">
+            Press F5 or Reload/Refresh Browser to Reset Simulation.
+        </p>
+        <a id="link" class="text-sm hover:text-lime-500 text-yellow-200 mb-8 text-center" href="index.html">
+            Back to Simulations Index
+        </a>
+
+        <!-- Configuration Panel and Simulation -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            
+            <!-- DNS Hierarchy Servers -->
+            <div class="lg:col-span-1 container-card border-purple-500">
+                <h3 class="text-2xl font-bold text-gray-800 mb-4">DNS Hierarchy</h3>
+                <div id="servers-config">
+                    <div class="server-box">
+                        <strong>Root Server:</strong> <span class="font-mono">1.0.0.1</span>
+                        <p class="text-sm text-gray-600">Knows only the TLD servers.</p>
+                    </div>
+                    <div class="server-box">
+                        <strong>TLD Server (.com):</strong> <span class="font-mono">2.0.0.2</span>
+                        <p class="text-sm text-gray-600">Knows only the Authoritative servers for .com domains.</p>
+                    </div>
+                    <div class="server-box">
+                        <strong>Authoritative Server (example.com):</strong> <span class="font-mono">3.0.0.3</span>
+                        <p class="text-sm text-gray-600">Holds the definitive A record (IP address) for the domain.</p>
+                    </div>
+                </div>
+
+                <div class="mt-6">
+                    <label for="domainInput" class="block text-sm font-medium text-gray-700 mb-2">
+                        Enter Domain to Resolve (e.g., mail.example.com)
+                    </label>
+                    <input type="text" id="domainInput" value="www.example.com" 
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 mb-4 font-mono text-lg">
+                    
+                    <button id="start-btn" onclick="startSimulation()" 
+                            class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-150">
+                        Start DNS Resolution
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Simulation Log -->
+            <div class="lg:col-span-2 container-card border-blue-500">
+                <h3 class="text-2xl font-bold text-gray-800 mb-4">DNS Query Log (Recursive Resolver's View)</h3>
+                <div id="log" class="log-container">
+                    <p class="log-info">System: Ready to start simulation. Enter a domain and click 'Start DNS Resolution'.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="container-card border-green-500 mt-6">
+            <h3 class="text-2xl font-bold text-gray-800 mb-4">Recursive DNS Resolver Cache</h3>
+            <div id="cache-status" class="terminal p-4">
+                <p>Cache Status:</p>
+                <ul id="cache-list" class="list-disc list-inside text-gray-300 ml-4">
+                    <!-- Cache entries will appear here -->
+                </ul>
+                [Image of DNS Resolution Process]
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Simulated DNS Data ---
+        // Simulates the definitive DNS records held by the Authoritative Server
+        const DNS_RECORDS = {
+            'example.com': '3.0.0.3', // Authoritative Server IP
+            'www.example.com': '93.184.216.34', // Final IP Address
+            'mail.example.com': '192.0.2.1',
+            'blog.example.com': '203.0.113.5'
+        };
+
+        // Simulates the DNS cache on the Recursive Resolver
+        let dnsCache = {};
+
+        // --- Simulated Server IPs ---
+        const LOCAL_RESOLVER_IP = '192.168.1.1'; // Stub Resolver (User's device)
+        const RECURSIVE_RESOLVER_IP = '8.8.8.8'; // Public Recursive Server (e.g., Google DNS)
+        const ROOT_SERVER_IP = '1.0.0.1';
+        const TLD_SERVER_IP = '2.0.0.2';
+        const AUTHORITATIVE_SERVER_IP = '3.0.0.3';
+
+        // --- DOM References ---
+        const log = document.getElementById('log');
+        const cacheList = document.getElementById('cache-list');
+        const domainInput = document.getElementById('domainInput');
+        const startBtn = document.getElementById('start-btn');
+        
+        // --- Utility Functions ---
+
+        /** Logs a message to the simulation console with appropriate styling. */
+        function logMessage(text, className = 'log-info') {
+            const entry = document.createElement('p');
+            entry.className = className + ' mb-1';
+            entry.textContent = `[Time] ${text}`;
+            log.appendChild(entry);
+            log.scrollTop = log.scrollHeight;
+        }
+
+        /** Delays execution to simulate network latency. */
+        const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+        /** Updates the display of the DNS cache. */
+        function updateCacheDisplay() {
+            cacheList.innerHTML = '';
+            const keys = Object.keys(dnsCache);
+            if (keys.length === 0) {
+                cacheList.innerHTML = '<li class="text-gray-400">Cache is empty.</li>';
+                return;
+            }
+            
+            keys.forEach(domain => {
+                const li = document.createElement('li');
+                li.innerHTML = `<span class="log-query">${domain}</span> -> <span class="log-response">${dnsCache[domain]}</span> (TTL: 60s)`;
+                cacheList.appendChild(li);
+            });
+        }
+
+        /** Gets the IP of the next server based on the domain part. */
+        function getNextServer(domainParts, currentStep) {
+            if (currentStep === 'ROOT') return ROOT_SERVER_IP;
+            if (currentStep === 'TLD') return TLD_SERVER_IP;
+            if (currentStep === 'AUTHORITATIVE') return AUTHORITATIVE_SERVER_IP;
+            return null; // Should not happen
+        }
+
+        /** Gets the response from the simulated authoritative servers. */
+        function simulateServerResponse(serverType, domain) {
+            if (serverType === 'ROOT') {
+                const tld = domain.split('.').pop(); // e.g., 'com'
+                return { type: 'NS', data: TLD_SERVER_IP, message: `The Root server knows the TLD Server for **.${tld}**.` };
+            }
+            if (serverType === 'TLD') {
+                const secondLevel = domain.split('.').slice(-2).join('.'); // e.g., 'example.com'
+                return { type: 'NS', data: AUTHORITATIVE_SERVER_IP, message: `The TLD server knows the Authoritative Server for **${secondLevel}**.` };
+            }
+            if (serverType === 'AUTHORITATIVE') {
+                const ip = DNS_RECORDS[domain];
+                return { type: 'A', data: ip, message: `The Authoritative server has the final **A record**!` };
+            }
+            return { type: 'ERROR', data: null, message: 'Server error or record not found.' };
+        }
+
+        // --- Core Simulation Logic ---
+
+        async function startSimulation() {
+            const fqdn = domainInput.value.trim().toLowerCase();
+            if (!fqdn) {
+                logMessage("Please enter a domain name.", 'log-error');
+                return;
+            }
+            
+            log.innerHTML = '';
+            startBtn.disabled = true;
+            
+            logMessage(`\n--- STARTING RESOLUTION FOR: ${fqdn} ---`, 'log-stage');
+            await delay(500);
+
+            // Step 1: Client Query (Stub Resolver)
+            logMessage(`\n--- STEP 1: CLIENT QUERY (STUB RESOLVER) ---`, 'log-stage');
+            logMessage(`Client (${LOCAL_RESOLVER_IP}) queries its configured Recursive Resolver.`, 'log-info');
+            logMessage(`Query: ${fqdn} (Type A)`, 'log-query');
+            await delay(1000);
+
+            // Step 2: Recursive Resolver Checks Cache
+            logMessage(`\n--- STEP 2: RECURSIVE RESOLVER CHECK (CACHE) ---`, 'log-stage');
+            
+            if (dnsCache[fqdn]) {
+                logMessage(`Cache Hit! Found ${fqdn} -> ${dnsCache[fqdn]} in local cache.`, 'log-cache');
+                logMessage(`Resolver sends cached response back to Client.`, 'log-success');
+                logMessage(`FINAL ANSWER: ${fqdn} is ${dnsCache[fqdn]}`, 'log-response');
+                startBtn.disabled = false;
+                return;
+            } else {
+                logMessage(`Cache Miss. ${fqdn} not found. Must perform iterative queries.`, 'log-info');
+                await delay(500);
+            }
+
+            // Step 3-7: Iterative Query Process
+            let currentServerType = 'ROOT';
+            let currentServerIP = ROOT_SERVER_IP;
+            let finalIP = null;
+            let queryDomain = fqdn;
+            let steps = 3;
+
+            // 
+
+            while (currentServerType && steps <= 7) {
+                logMessage(`\n--- STEP ${steps}: QUERYING ${currentServerType} SERVER ---`, 'log-stage');
+                logMessage(`Recursive Resolver (${RECURSIVE_RESOLVER_IP}) sends an iterative query to ${currentServerType} Server (${currentServerIP}).`, 'log-info');
+                logMessage(`Query: ${queryDomain} (Type A)`, 'log-query');
+                await delay(1500);
+
+                const response = simulateServerResponse(currentServerType, fqdn);
+                logMessage(`Response from ${currentServerType} Server: ${response.message}`, 'log-info');
+
+                if (response.type === 'NS') {
+                    // Received a pointer to the next server
+                    currentServerIP = response.data;
+                    logMessage(`Response: Find the answer at server ${currentServerIP}`, 'log-response');
+                    if (currentServerType === 'ROOT') {
+                        currentServerType = 'TLD';
+                    } else if (currentServerType === 'TLD') {
+                        currentServerType = 'AUTHORITATIVE';
+                    } else {
+                        // Should not happen in this simulation
+                        break;
+                    }
+                } else if (response.type === 'A') {
+                    // Received the final IP address
+                    finalIP = response.data;
+                    logMessage(`Response: ${fqdn} has IP address ${finalIP}`, 'log-response');
+                    currentServerType = null; // Exit loop
+                } else {
+                    logMessage(`Unexpected server response error. Aborting.`, 'log-error');
+                    currentServerType = null;
+                }
+                
+                steps++;
+                await delay(500);
+            }
+
+            // Step 8: Final Response and Caching
+            logMessage(`\n--- STEP 8: FINAL ANSWER & CACHING ---`, 'log-stage');
+
+            if (finalIP) {
+                // Cache the result
+                dnsCache[fqdn] = finalIP;
+                updateCacheDisplay();
+                logMessage(`Recursive Resolver Caches the result: ${fqdn} -> ${finalIP}.`, 'log-cache');
+                
+                // Send the final answer back to the Stub Resolver
+                logMessage(`Resolver sends the final answer back to Client (${LOCAL_RESOLVER_IP}).`, 'log-success');
+                logMessage(`FINAL ANSWER: ${fqdn} is ${finalIP}`, 'log-response');
+            } else {
+                logMessage(`DNS Resolution Failed. No IP address was returned.`, 'log-error');
+            }
+
+            startBtn.disabled = false;
+        }
+
+        // Initialize on load
+        window.onload = function() {
+            updateCacheDisplay();
+            // Clear cache on refresh for a fresh start
+            // dnsCache = {}; 
+        };
+
+    </script>
+</body>
+</html>

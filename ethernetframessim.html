@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ethernet Frame Structure Simulator</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Consolas', 'Courier New', monospace;
+            background: linear-gradient(180deg, #353636 50%, #032a36 75%);
+            min-height: 100vh;
+        }
+        a {
+            display: block;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            text-align: center;
+        }
+        .card {
+            background-color: rgb(228, 226, 226);
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+            padding: 1rem;
+            height: 100%;
+            max-height: 800px;;
+        }
+        .console-output {
+            background-color: #1f2937; /* Dark console background */
+            color: #d1d5db; /* Light text */
+            font-family: 'Consolas', 'Courier New', monospace;
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            line-height: 1.5;
+            font-size: 0.9rem;
+        }
+        /* Console log coloring for clarity */
+        .log-step { color: #f6ad55; font-weight: bold; } /* Orange/Amber */
+        .log-error { color: #f56565; } /* Red */
+        .log-info { color: #a0aec0; }
+        .log-success { color: #48bb78; } /* Green */
+
+        /* Frame breakdown styling */
+        .frame-field {
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.5rem;
+            margin-bottom: 0.5rem;
+            transition: all 0.2s;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8 min-h-screen">
+
+    <div class="max-w-7xl mx-auto">
+        <h1 class="text-4xl font-extrabold text-orange-500 mb-2 text-center">
+            Ethernet Frame Simulator
+        </h1>
+        <p class="text-lg text-white mb-8 text-center">
+            Visualize the OSI Layer 2 structure and function of an Ethernet II Frame.
+        </p>
+        <p class="text-sm text-yellow-500 mb-8 text-center">
+            Press F5 or Reload/Refresh Browser to Reset Simulation.
+        </p>
+        <a id="link" class="text-sm hover:text-lime-500 text-yellow-200 mb-8 text-center" href="index.html">
+            Back to Simulations Index
+        </a>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+            
+            <!-- Controls & Explanation -->
+            <div class="lg:col-span-1">
+                <div class="card mb-6">
+                    <h3 class="text-2xl font-bold text-gray-800 mb-4">Frame Input</h3>
+
+                    <p class="text-gray-700 mb-4 text-sm">
+                        [Image of Ethernet Frame Structure]
+                        Ethernet Frames are the basic units of data transmission at the Data Link Layer (Layer 2). They encapsulate Layer 3 packets (like IP) for physical transmission.
+                    </p>
+
+                    <label for="destMac" class="block text-sm font-medium text-gray-700 mb-1">Destination MAC (6 bytes, e.g., 00:1A:2B:3C:4D:5E)</label>
+                    <input type="text" id="destMac" value="00:1A:2B:3C:4D:5E"
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 mb-4 font-mono text-base">
+
+                    <label for="sourceMac" class="block text-sm font-medium text-gray-700 mb-1">Source MAC (6 bytes, e.g., A1:B2:C3:D4:E5:F6)</label>
+                    <input type="text" id="sourceMac" value="A1:B2:C3:D4:E5:F6"
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 mb-4 font-mono text-base">
+
+                    <label for="payload" class="block text-sm font-medium text-gray-700 mb-1">Payload (Data)</label>
+                    <textarea id="payload" rows="3" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 mb-6 font-mono text-base">Hello IT Class! This is a test message to be encapsulated in an Ethernet Frame.</textarea>
+                    
+                    <button id="generate-btn" onclick="generateFrame()" 
+                            class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-150">
+                        Assemble and Transmit Frame
+                    </button>
+                </div>
+            </div>
+
+            <!-- Frame Breakdown and Console -->
+            <div class="lg:col-span-2 grid grid-rows-2 gap-8">
+                <!-- Frame Breakdown -->
+                <div class="card">
+                    <h3 class="text-2xl font-bold text-gray-800 mb-4">Assembled Frame Breakdown (Layer 2)</h3>
+                    <div id="frame-breakdown" class="space-y-2">
+                        <!-- Frame fields will be injected here -->
+                        <p class="text-gray-500 italic">Enter the frame details and click "Assemble and Transmit Frame" to see the breakdown.</p>
+                    </div>
+                    <div id="frame-summary" class="mt-4 pt-4 border-t border-gray-200 text-sm font-semibold"></div>
+                </div>
+
+                <!-- Console Output -->
+                <div class="card p-1">
+                    <h3 class="text-2xl font-bold text-gray-800 px-8 pt-6">Frame Generation Console</h3>
+                    <div id="console" class="console-output">
+                        Ready to assemble the Ethernet Frame.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Constants for Ethernet II Frame
+        const FRAME_LIMITS = {
+            MIN_PAYLOAD: 46, // Minimum payload size (padding is added if less)
+            MAX_PAYLOAD: 1500, // Maximum payload size (MTU)
+            MIN_FRAME: 64, // Preamble + SFD + Frame + FCS
+            MAX_FRAME: 1518, // Preamble + SFD + Frame + FCS
+        };
+        const ETHERNET_CONSTANTS = {
+            PREAMBLE_SFD_SIZE: 8, // 7 Bytes Preamble + 1 Byte SFD
+            MAC_SIZE: 6, // Bytes
+            ETYPE_SIZE: 2, // Bytes
+            FCS_SIZE: 4, // Bytes (CRC-32)
+            IPV4_ETYPE: "0800", // Common EtherType for IPv4
+        };
+
+        const consoleOutput = document.getElementById('console');
+        const frameBreakdownDiv = document.getElementById('frame-breakdown');
+        const frameSummaryDiv = document.getElementById('frame-summary');
+
+        /** Helper function to log messages to the console with styling */
+        function log(message, type = 'log-info') {
+            const time = new Date().toLocaleTimeString('en-US', { hour12: false, second: '2-digit' });
+            consoleOutput.innerHTML += `[${time}] <span class="${type}">${message}</span>\n`;
+            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+        }
+
+        /** Helper function to mock a CRC32 hash (FCS) */
+        function mockCrc32(data) {
+            let hash = 0xEDB88320; // Standard CRC-32 polynomial
+            for (let i = 0; i < data.length; i++) {
+                hash ^= data.charCodeAt(i);
+                for (let j = 0; j < 8; j++) {
+                    hash = (hash >>> 1) ^ (hash & 1 ? 0xEDB88320 : 0);
+                }
+            }
+            // Return as a 4-byte hex string
+            return (hash >>> 0).toString(16).toUpperCase().padStart(8, '0');
+        }
+
+        /** Validates and cleans MAC address input */
+        function sanitizeMac(mac) {
+            const cleanMac = mac.replace(/[^0-9a-fA-F]/g, '').toUpperCase();
+            if (cleanMac.length !== 12) {
+                return null;
+            }
+            // Reformat with colons for display
+            return cleanMac.match(/.{2}/g).join(':');
+        }
+
+        /** Creates and displays the Ethernet Frame structure */
+        function generateFrame() {
+            consoleOutput.innerHTML = '';
+            frameBreakdownDiv.innerHTML = '';
+            frameSummaryDiv.textContent = '';
+            
+            log('Starting Ethernet Frame assembly process...', 'log-step');
+
+            const destMacInput = document.getElementById('destMac').value;
+            const sourceMacInput = document.getElementById('sourceMac').value;
+            const payloadInput = document.getElementById('payload').value;
+
+            const destMac = sanitizeMac(destMacInput);
+            const sourceMac = sanitizeMac(sourceMacInput);
+            const payloadBytes = new TextEncoder().encode(payloadInput).length;
+
+            if (!destMac || !sourceMac) {
+                log('Error: Invalid MAC address format. Please use 12 hex characters (e.g., AA:BB:CC:DD:EE:FF).', 'log-error');
+                return;
+            }
+            
+            // 1. Determine Padding and Total Size
+            let paddingBytes = 0;
+            if (payloadBytes < FRAME_LIMITS.MIN_PAYLOAD) {
+                paddingBytes = FRAME_LIMITS.MIN_PAYLOAD - payloadBytes;
+                log(`Payload (${payloadBytes} B) is below minimum of ${FRAME_LIMITS.MIN_PAYLOAD} B. Adding ${paddingBytes} bytes of padding.`, 'log-info');
+            } else if (payloadBytes > FRAME_LIMITS.MAX_PAYLOAD) {
+                log(`Error: Payload (${payloadBytes} B) exceeds Maximum Transmission Unit (MTU) of ${FRAME_LIMITS.MAX_PAYLOAD} B. Frame generation failed.`, 'log-error');
+                return;
+            }
+            
+            const effectivePayloadSize = payloadBytes + paddingBytes;
+            const totalFrameBytes = ETHERNET_CONSTANTS.MAC_SIZE * 2 + ETHERNET_CONSTANTS.ETYPE_SIZE + effectivePayloadSize + ETHERNET_CONSTANTS.FCS_SIZE;
+            const totalPacketSize = totalFrameBytes + ETHERNET_CONSTANTS.PREAMBLE_SFD_SIZE;
+            
+            log(`Total Frame Body size: ${totalFrameBytes} bytes.`, 'log-info');
+            log(`Total transmitted size (including Preamble/SFD): ${totalPacketSize} bytes.`, 'log-info');
+
+            // 2. Mock Frame Check Sequence (FCS/CRC)
+            const crcData = sourceMac + destMac + payloadInput + '0800'; // Simplified CRC calc on core fields
+            const fcsValue = mockCrc32(crcData);
+            log(`Calculating Frame Check Sequence (FCS) based on all frame contents... FCS: ${fcsValue}`, 'log-step');
+
+            // 3. Assemble the Frame Fields
+            const frameFields = [
+                { 
+                    name: 'Preamble + SFD', 
+                    bytes: ETHERNET_CONSTANTS.PREAMBLE_SFD_SIZE, 
+                    value: '10101010...10101011', 
+                    color: 'bg-green-100 text-green-800', 
+                    description: 'Synchronization and Start of Frame Delimiter. Used by the physical layer to synchronize clocks and mark the frame beginning. (Not technically part of the "Frame" body, but part of the transmission.)'
+                },
+                { 
+                    name: 'Destination MAC Address', 
+                    bytes: ETHERNET_CONSTANTS.MAC_SIZE, 
+                    value: destMac, 
+                    color: 'bg-blue-100 text-blue-800', 
+                    description: 'The physical address of the next device (e.g., Switch or Host) that should receive this frame.'
+                },
+                { 
+                    name: 'Source MAC Address', 
+                    bytes: ETHERNET_CONSTANTS.MAC_SIZE, 
+                    value: sourceMac, 
+                    color: 'bg-blue-100 text-blue-800', 
+                    description: 'The physical address of the device that sent this frame.'
+                },
+                { 
+                    name: 'EtherType (Type)', 
+                    bytes: ETHERNET_CONSTANTS.ETYPE_SIZE, 
+                    value: `0x${ETHERNET_CONSTANTS.IPV4_ETYPE} (IPv4)`, 
+                    color: 'bg-yellow-100 text-yellow-800', 
+                    description: 'Indicates the protocol carried in the Payload (e.g., 0x0800 means the payload is an IPv4 packet, guiding the network stack on how to process the data).'
+                },
+                { 
+                    name: 'Payload (Data)', 
+                    bytes: payloadBytes, 
+                    value: payloadInput.substring(0, 50) + (payloadInput.length > 50 ? '...' : ''), 
+                    color: 'bg-purple-100 text-purple-800', 
+                    description: 'The actual data being transported (e.g., an IP packet or ARP message).'
+                },
+                { 
+                    name: 'Padding', 
+                    bytes: paddingBytes, 
+                    value: paddingBytes > 0 ? `[${paddingBytes} bytes of zeros]` : 'N/A', 
+                    color: paddingBytes > 0 ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-500', 
+                    description: `Added to ensure the Payload + Header is at least ${FRAME_LIMITS.MIN_FRAME - ETHERNET_CONSTANTS.FCS_SIZE} bytes long.`
+                },
+                { 
+                    name: 'Frame Check Sequence (FCS)', 
+                    bytes: ETHERNET_CONSTANTS.FCS_SIZE, 
+                    value: `0x${fcsValue} (CRC)`, 
+                    color: 'bg-red-100 text-red-800', 
+                    description: 'Cyclic Redundancy Check (CRC-32) value. Used by the receiving device to check if the frame data was corrupted during transmission.'
+                },
+            ];
+
+            // 4. Render Frame Breakdown
+            frameFields.forEach(field => {
+                const element = document.createElement('div');
+                element.className = `frame-field ${field.color} grid grid-cols-1 md:grid-cols-5 items-center`;
+                
+                element.innerHTML = `
+                    <div class="col-span-1 font-extrabold text-lg">${field.name}</div>
+                    <div class="col-span-1 font-mono text-sm">${field.bytes} B</div>
+                    <div class="col-span-1 text-sm font-semibold truncate" title="${field.value}">${field.value}</div>
+                    <div class="col-span-2 text-xs italic">${field.description}</div>
+                `;
+                frameBreakdownDiv.appendChild(element);
+            });
+            
+            frameSummaryDiv.innerHTML = `Total Frame Size: <span class="text-indigo-600">${totalPacketSize} bytes</span> | 
+                                         Frame Body (excluding Preamble/SFD): <span class="text-indigo-600">${totalFrameBytes} bytes</span> | 
+                                         Padding Added: <span class="text-indigo-600">${paddingBytes} bytes</span>`;
+
+            // 5. Simulate Reception Check
+            log('\n--- SIMULATING RECEPTION ---', 'log-step');
+            log(`Switch/Hub receives the signal and passes the frame to all devices in the segment.`, 'log-info');
+            log(`Target Device (MAC: ${destMac}) receives the frame.`, 'log-info');
+            
+            // Mock a check
+            setTimeout(() => {
+                const isCorrupted = Math.random() < 0.05; // 5% chance of corruption
+                if (isCorrupted) {
+                    log(`FCS Check: FAILURE! The calculated FCS does NOT match 0x${fcsValue}. Frame is discarded by the NIC.`, 'log-error');
+                } else {
+                    log(`FCS Check: SUCCESS! The calculated FCS matches 0x${fcsValue}. Data integrity confirmed.`, 'log-success');
+                    log(`Frame accepted. Header stripped, Payload passed up to Layer 3 (IP).`, 'log-success');
+                }
+            }, 1000);
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+             // Initial frame assembly on load for immediate display
+             generateFrame();
+             log('Use the controls above to define your own frame and observe the structure.', 'log-info');
+        });
+
+    </script>
+</body>
+</html>

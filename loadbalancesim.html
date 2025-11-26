@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Load Balancer Simulation</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Consolas', 'Courier New', monospace;
+            background: linear-gradient(180deg, #353636 50%, #032a36 75%);
+            min-height: 100vh;
+        }
+        a {
+            display: block;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            text-align: center;
+        }
+        .container-card {
+            background-color: white;
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+            padding: 2rem;
+        }
+        .console-output {
+            background-color: #1a202c; /* Dark console background */
+            color: #10ee09; /* Light text */
+            font-family: 'Consolas', 'Courier New', monospace;
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            min-height: 450px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            line-height: 1.5;
+            text-align: left;
+            font-size: small;
+        }
+        /* Console log coloring for clarity */
+        .log-client { color: #90cdf4; } /* Light Blue */
+        .log-lb { color: #f6ad55; }    /* Orange/Amber */
+        .log-server-ok { color: #48bb78; } /* Green */
+        .log-server-fail { color: #fc8181; } /* Red */
+        .log-info { color: #a0aec0; }
+        .log-step { font-weight: bold; margin-top: 0.5rem; padding-top: 0.25rem; border-top: 1px dashed #2d3748; }
+
+        /* Server status indicators */
+        .server-status {
+            transition: all 0.3s ease;
+            font-size: 0.875rem;
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+        .server-healthy {
+            background-color: #9ae6b4; /* Light Green */
+            color: #276749; /* Dark Green */
+        }
+        .server-unhealthy {
+            background-color: #feb2b2; /* Light Red */
+            color: #9b2c2c; /* Dark Red */
+        }
+    </style>
+</head>
+<body class="p-4 md:p-10 min-h-screen">
+
+    <div class="max-w-7xl mx-auto">
+        <h1 class="text-4xl font-extrabold text-orange-500 mb-2 text-center">
+            Load Balancer Simulation
+        </h1>
+        <p class="text-lg text-white mb-8 text-center">
+            Distributing client requests across a server pool using different algorithms.
+        </p>
+        <p class="text-sm text-yellow-500 mb-8 text-center">
+            Press F5 or Reload/Refresh Browser to Reset Simulation.
+        </p>
+        <a id="link" class="text-sm hover:text-lime-500 text-yellow-200 mb-8 text-center" href="index.html">
+            Back to Simulations Index
+        </a>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+            
+            <!-- Controls & Server Health -->
+            <div class="lg:col-span-1">
+                <div class="container-card mb-6">
+                    <h3 class="text-2xl font-bold text-gray-800 mb-2">Controls</h3>
+
+                    <label for="algorithm" class="block text-sm font-medium text-gray-700 mb-2">
+                        1. Select Algorithm
+                    </label>
+                    <select id="algorithm" onchange="resetRoundRobin()"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 mb-4 font-mono text-base">
+                        <option value="round-robin">Round Robin</option>
+                        <option value="least-connections">Least Connections</option>
+                    </select>
+
+                    <label for="numRequests" class="block text-sm font-medium text-gray-700 mb-2">
+                        2. Number of Requests to Send
+                    </label>
+                    <input type="number" id="numRequests" value="5" min="1" max="10"
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 mb-6 font-mono text-base">
+
+                    <button id="send-btn" onclick="sendRequests()" 
+                            class="w-full bg-cyan-500 hover:bg-cyan-800 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-150 mb-4">
+                        Send Requests
+                    </button>
+                    
+                    <button id="fail-btn" onclick="toggleServerFailure()" 
+                            class="w-full bg-zinc-500 hover:bg-zinc-800 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-150">
+                        Toggle Server-3 Failure (Simulate Health Check Failure)
+                    </button>
+                </div>
+
+                <!-- Live Server Status Panel -->
+                <div class="container-card">
+                    <h3 class="text-2xl font-bold text-gray-800 mb-2">Live Server Status</h3>
+                    <div id="server-status-container">
+                        <!-- Server status elements will be injected here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Console Output -->
+            <div class="lg:col-span-2">
+                <div class="container-card p-2">
+                    <h3 class="text-2xl font-bold text-gray-800 px-8 pt-70">Simulation Console Log</h3>
+                    <div id="console" class="console-output">
+                        Waiting for requests...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Global Simulation State ---
+        const CONSOLE_MAX_LINES = 500;
+        const LB_IP = '10.0.0.1';
+        
+        // Initial setup of 4 backend servers
+        let servers = [
+            { id: 'Server-1', load: 0, healthy: true, latency: 400 },
+            { id: 'Server-2', load: 0, healthy: true, latency: 600 },
+            { id: 'Server-3', load: 0, healthy: true, latency: 500 },
+            { id: 'Server-4', load: 0, healthy: true, latency: 350 },
+        ];
+
+        let roundRobinIndex = 0; // State for Round Robin
+        let isSimulating = false; // Prevents spamming the button
+
+        const consoleOutput = document.getElementById('console');
+        const statusContainer = document.getElementById('server-status-container');
+        const sendBtn = document.getElementById('send-btn');
+        const failBtn = document.getElementById('fail-btn');
+
+
+        // --- UI & Logging Functions ---
+
+        /** Helper function to log messages to the console with styling */
+        function log(message, type = 'log-info') {
+            const time = new Date().toLocaleTimeString('en-US', { hour12: false });
+            // Truncate old lines if console gets too large
+            if (consoleOutput.children.length > CONSOLE_MAX_LINES) {
+                consoleOutput.removeChild(consoleOutput.firstChild);
+            }
+            consoleOutput.innerHTML += `[${time}] <span class="${type}">${message}</span>\n`;
+            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+        }
+
+        /** Renders the current status of all servers */
+        function renderServerStatus() {
+            statusContainer.innerHTML = '';
+            servers.forEach(server => {
+                const statusClass = server.healthy ? 'server-healthy' : 'server-unhealthy';
+                const statusText = server.healthy ? 'HEALTHY' : 'UNHEALTHY (Failing)';
+                const element = document.createElement('div');
+                element.className = `server-status ${statusClass}`;
+                element.innerHTML = `
+                    <span class="font-semibold">${server.id}</span>: 
+                    ${statusText} | 
+                    Active Load: <span class="font-mono text-lg">${server.load}</span> | 
+                    Latency: ${server.latency}ms
+                `;
+                statusContainer.appendChild(element);
+            });
+            failBtn.textContent = servers.find(s => s.id === 'Server-3').healthy ? 
+                'Toggle Server-3 Failure (FAIL)' : 
+                'Toggle Server-3 Failure (RECOVER)';
+        }
+
+        function resetRoundRobin() {
+            roundRobinIndex = 0;
+            log(`Round Robin index reset to 0 due to algorithm change.`, 'log-info');
+        }
+
+        // --- Server Health Simulation ---
+
+        /** Toggles the 'healthy' status of Server-3 for demonstration */
+        function toggleServerFailure() {
+            const server3 = servers.find(s => s.id === 'Server-3');
+            server3.healthy = !server3.healthy;
+            
+            if (server3.healthy) {
+                log(`Health Check: ${server3.id} has RECOVERED and is marked HEALTHY.`, 'log-server-ok');
+            } else {
+                log(`Health Check: ${server3.id} has FAILED and is marked UNHEALTHY.`, 'log-server-fail');
+            }
+            renderServerStatus();
+        }
+
+
+        // --- Load Balancer Logic ---
+
+        /** Finds the next server using the Round Robin algorithm, skipping unhealthy servers */
+        function roundRobin(availableServers) {
+            let attempts = 0;
+            let selectedServer = null;
+
+            while (attempts < availableServers.length) {
+                const server = availableServers[roundRobinIndex % availableServers.length];
+                roundRobinIndex++;
+                
+                if (server.healthy) {
+                    selectedServer = server;
+                    break;
+                }
+                attempts++;
+            }
+            return selectedServer;
+        }
+
+        /** Finds the server with the Least Connections (lowest load), skipping unhealthy servers */
+        function leastConnections(availableServers) {
+            let minLoad = Infinity;
+            let selectedServer = null;
+
+            // Filter out unhealthy servers first
+            const healthyServers = availableServers.filter(s => s.healthy);
+            
+            if (healthyServers.length === 0) return null;
+
+            for (const server of healthyServers) {
+                if (server.load < minLoad) {
+                    minLoad = server.load;
+                    selectedServer = server;
+                }
+            }
+            return selectedServer;
+        }
+
+        /** The main function of the Load Balancer (LB) */
+        function balanceLoad(requestID) {
+            const algorithm = document.getElementById('algorithm').value;
+            let selectedServer = null;
+
+            log(`\n--- STEP 2: LOAD BALANCER DECISION (Request #${requestID}) ---`, 'log-step');
+            log(`LB (${LB_IP}) received Request #${requestID}. Algorithm: ${algorithm}`, 'log-lb');
+
+            if (algorithm === 'round-robin') {
+                selectedServer = roundRobin(servers);
+            } else if (algorithm === 'least-connections') {
+                selectedServer = leastConnections(servers);
+            }
+
+            if (selectedServer) {
+                log(`Selection: ${algorithm} chose ${selectedServer.id} (Current Load: ${selectedServer.load})`, 'log-lb');
+                handleServerConnection(selectedServer, requestID);
+            } else {
+                log(`FAILURE: No healthy servers available to handle Request #${requestID}!`, 'log-server-fail');
+            }
+            renderServerStatus();
+        }
+
+        /** Simulates the server handling the connection */
+        function handleServerConnection(server, requestID) {
+            // 1. Connection established: Increase load
+            server.load++;
+            renderServerStatus(); // Update UI with new load
+
+            log(`--- STEP 3: CONNECTION ESTABLISHED ---`, 'log-step');
+            log(`${server.id}: Accepted Request #${requestID}. Load increased to ${server.load}.`, 'log-server-ok');
+            log(`${server.id}: Processing request (simulated delay of ${server.latency}ms)...`, 'log-server-ok');
+
+            // 2. Simulate processing time
+            setTimeout(() => {
+                // 3. Connection complete: Decrease load
+                server.load--;
+                log(`--- STEP 4: REQUEST COMPLETE ---`, 'log-step');
+                log(`${server.id}: Finished Request #${requestID}. Load decreased to ${server.load}.`, 'log-server-ok');
+
+                // 4. Client receives response
+                log(`Client: Received response for Request #${requestID}.`, 'log-client');
+                renderServerStatus(); // Update UI with decreased load
+            }, server.latency);
+        }
+
+
+        // --- Main Execution ---
+
+        async function sendRequests() {
+            if (isSimulating) {
+                log('Simulation is already running. Please wait.', 'log-info');
+                return;
+            }
+
+            isSimulating = true;
+            sendBtn.disabled = true;
+            sendBtn.textContent = 'Sending...';
+
+            const numRequests = parseInt(document.getElementById('numRequests').value) || 1;
+            log(`\n======================================================`, 'log-step');
+            log(`STARTING BATCH OF ${numRequests} REQUESTS.`, 'log-step');
+            log(`======================================================`, 'log-step');
+
+            // Send requests one by one with a small delay to visualize the distribution
+            for (let i = 1; i <= numRequests; i++) {
+                // --- STEP 1: CLIENT REQUEST ---
+                log(`Client: Sending Request #${i} to Load Balancer (${LB_IP}).`, 'log-client');
+                balanceLoad(i);
+                
+                // Wait for a brief moment before sending the next request (simulates arrival rate)
+                await new Promise(resolve => setTimeout(resolve, 300)); 
+            }
+            
+            // Wait for all current connections (max latency) to finish before re-enabling button
+            const maxLatency = servers.reduce((max, s) => Math.max(max, s.latency), 0);
+            await new Promise(resolve => setTimeout(resolve, maxLatency + 500));
+            
+            log(`\n======================================================`, 'log-step');
+            log(`BATCH COMPLETE. Waiting for next set of requests.`, 'log-step');
+            log(`======================================================`, 'log-step');
+
+            isSimulating = false;
+            sendBtn.disabled = false;
+            sendBtn.textContent = 'Send Requests';
+        }
+
+        // Initialize the UI on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            log('Simulation initialized. Select an algorithm and send requests.', 'log-info');
+            renderServerStatus();
+        });
+
+    </script>
+</body>
+</html>

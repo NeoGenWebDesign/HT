@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EIGRP DUAL Algorithm Simulator</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Consolas', 'Courier New', monospace;
+            background: linear-gradient(180deg, #353636 50%, #032a36 75%);
+            min-height: 100vh;
+        }
+        a {
+            display: block;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            text-align: center;
+        }
+        .card {
+            background-color: rgb(197, 197, 197);
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 4, 0, 0.05);
+            padding: 0.75rem;
+            height: 100%;
+        }
+        .console-output {
+            background-color: #1f2937; /* Dark console background */
+            color: #0feb22; /* Light text */
+            font-family: 'Consolas', 'Courier New', monospace;
+            border-radius: 0.75rem;
+            padding: 0.55rem;
+            min-height: 200px;
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            line-height: 1.5;
+            font-size: 1rem;
+        }
+        /* Console log coloring for clarity */
+        .log-step { color: #f6ad55; font-weight: bold; } /* Orange/Amber */
+        .log-dual { color: #63b3ed; } /* Blue for DUAL */
+        .log-success { color: #48bb78; } /* Green for Feasible Successor */
+        .log-fail { color: #f56565; } /* Red for Failure */
+        .log-info { color: #a0aec0; }
+        .log-router { color: #a78bfa; font-weight: bold; } /* Purple for Router Name */
+
+        /* Network Diagram Styling */
+        #network-diagram {
+            position: relative;
+            height: 250px;
+            width: 100%;
+            margin: 0 auto;
+        }
+        .node {
+            position: absolute;
+            width: 80px;
+            height: 80px;
+            background-color: #4c51bf; /* Indigo */
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            font-weight: bold;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .link-line {
+            position: absolute;
+            background-color: #4a5568; /* Gray */
+            height: 3px;
+            transform-origin: 0 0;
+            transition: all 0.5s ease;
+        }
+        .link-metric {
+            position: absolute;
+            background-color: #fff;
+            padding: 2px 8px;
+            border-radius: 0.5rem;
+            font-weight: 500;
+            border: 1px solid #4a5568;
+            font-size: 0.8rem;
+            z-index: 5;
+        }
+        .link-line.broken {
+            background-color: #f56565; /* Red */
+            height: 5px;
+            opacity: 0.8;
+            border-style: dashed;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-10 min-h-screen">
+
+    <div class="max-w-7xl mx-auto">
+        <h1 class="text-4xl font-extrabold text-orange-500 mb-2 text-center">
+            EIGRP DUAL Algorithm & Feasibility Simulator
+        </h1>
+        <p class="text-lg text-white mb-8 text-center">
+            Examine how **Router R1** chooses the best path (**Successor**) and a loop-free backup (**Feasible Successor**) to reach **Network Z**.
+        </p>
+        <p class="text-sm text-yellow-500 mb-8 text-center">
+            Press F5 or Reload/Refresh Browser to Reset Simulation.
+        </p>
+        <a id="link" class="text-sm hover:text-lime-500 text-yellow-200 mb-8 text-center" href="index.html">
+            Back to Simulations Index
+        </a>
+        
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+            
+            <!-- Explanation & Controls -->
+            <div class="lg:col-span-1">
+                <div class="card mb-6">
+                    <h3 class="text-2xl font-bold text-gray-800 mb-4">EIGRP Concepts</h3>
+                    <p class="text-gray-700 mb-4 text-sm">
+                        EIGRP uses a composite metric (Bandwidth and Delay) to calculate the **Feasible Distance (FD)**. The core is the **DUAL Algorithm** to ensure loop-free paths. 
+                    </p>
+                    <ul class="list-disc list-inside text-sm text-gray-600 space-y-2 mb-4">
+                        <li>**Successor:** The neighbor with the lowest FD (best path).</li>
+                        <li>**Reported Distance (RD):** The distance reported by a neighbor (their FD).</li>
+                        <li>**Feasibility Condition (FC):** The crucial check: RD must be less than the current router's FD.</li>
+                        <li>**Feasible Successor (FS):** A backup route that satisfies the FC.</li>
+                    </ul>
+                    <hr class="my-4">
+                    <h3 class="text-xl font-bold text-gray-800 mb-4">Simulation Controls</h3>
+                    
+                    <button id="start-btn" onclick="startConvergence()" 
+                            class="w-full bg-amber-500 hover:bg-amber-800 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-150 mb-4">
+                        1. Start DUAL Convergence
+                    </button>
+
+                    <button id="break-btn" onclick="simulateFailure()" disabled
+                            class="w-full bg-cyan-700 hover:bg-cyan-900 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-150 opacity-70 cursor-not-allowed">
+                        2. Simulate Successor Failure (R1-R2 link)
+                    </button>
+                </div>
+            </div>
+
+            <!-- Network Diagram -->
+            <div class="lg:col-span-2">
+                <div class="card relative overflow-hidden">
+                    <h3 class="text-2xl font-bold text-gray-800 mb-4">Topology: R1's View to Network Z (100Mbps/1000us)</h3>
+                    <div id="network-diagram">
+                        <!-- Router R1 (Focus Router) -->
+                        <div class="node" style="left: 45%; top: 150px; background-color: #a78bfa;">R1</div>
+
+                        <!-- Path 1: Via R2 -->
+                        <div class="node" style="left: 10%; top: 50px;">R2</div>
+                        <div class="node" style="left: 10%; top: 150px; background-color: #48bb78;">Z</div>
+                        <!-- R1-R2 Link (Successor) -->
+                        <!-- Metrics: B=100000, D=1000 -->
+                        <div id="link-R1-R2" class="link-line" style="width: 250px; left: 140px; top: 185px; transform: rotate(-30deg);"></div>
+                        <div class="link-metric" style="left: 200px; top: 120px;">B: 100Mbps, D: 1000us</div>
+                        
+                        <!-- Path 2: Via R3 -->
+                        <div class="node" style="left: 80%; top: 50px;">R3</div>
+                        <div class="node" style="left: 80%; top: 150px; background-color: #48bb78;">Z</div>
+                         <!-- R1-R3 Link (Feasible Successor) -->
+                        <!-- Metrics: B=50000, D=3000 -->
+                        <div id="link-R1-R3" class="link-line" style="width: 250px; left: 540px; top: 185px; transform: rotate(30deg);"></div>
+                        <div class="link-metric" style="left: 550px; top: 120px;">B: 50Mbps, D: 3000us</div>
+
+                        <!-- Link R2-Z -->
+                        <div id="link-R2-Z" class="link-line bg-green-500" style="width: 100px; left: 140px; top: 185px; transform: rotate(90deg);"></div>
+                        <div class="link-metric border-green-500" style="left: 120px; top: 120px;">Net Z</div>
+
+                        <!-- Link R3-Z -->
+                        <div id="link-R3-Z" class="link-line bg-green-500" style="width: 100px; left: 840px; top: 185px; transform: rotate(90deg);"></div>
+                        <div class="link-metric border-green-500" style="left: 820px; top: 120px;">Net Z</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Console Output -->
+        <div class="card p-1 mt-8">
+            <h3 class="text-2xl font-bold text-gray-800 px-8 pt-6">DUAL Convergence Log</h3>
+            <div id="console" class="console-output">
+                Simulation ready. Press "Start DUAL Convergence" to begin R1's calculations.
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Global State and Constants ---
+        const consoleOutput = document.getElementById('console');
+        const breakBtn = document.getElementById('break-btn');
+        const startBtn = document.getElementById('start-btn');
+        const LINK_R1_R2 = document.getElementById('link-R1-R2');
+        const LINK_R1_R3 = document.getElementById('link-R1-R3');
+        
+        // Define destination (Network Z) and its parameters
+        const DEST_NETWORK = 'Network Z';
+        
+        // Router parameters: Link Metrics (Bandwidth in Kbps, Delay in Microseconds)
+        // These are the *additive* costs for R1's links to the next hop.
+        const PATHS = {
+            'R2': {
+                bandwidth: 100000, // 100 Mbps
+                delay: 1000,
+                rd: 28160000, // Reported Distance (R2's FD to Z)
+                linkId: 'link-R1-R2',
+                isSuccessor: false,
+                isFeasible: false,
+            },
+            'R3': {
+                bandwidth: 50000, // 50 Mbps
+                delay: 3000,
+                rd: 51200000, // Reported Distance (R3's FD to Z)
+                linkId: 'link-R1-R3',
+                isSuccessor: false,
+                isFeasible: false,
+            }
+        };
+
+        let R1_FD = Infinity; // R1's calculated Feasible Distance (best overall metric)
+        let currentState = 'Passive';
+
+        /** Utility: Logs messages to the console with styling */
+        function log(message, type = 'log-info') {
+            const time = new Date().toLocaleTimeString('en-US', { hour12: false, second: '2-digit' });
+            consoleOutput.innerHTML += `[${time}] <span class="${type}">${message}</span>\n`;
+            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+        }
+        
+        /**
+         * EIGRP Metric Calculation (Simplified K1=1, K2=0, K3=1, K4=0, K5=0)
+         * Metric = 256 * ( (10^7 / min_bandwidth) + (total_delay / 10) )
+         * Bandwidth is in Kbps, Delay is in Microseconds.
+         */
+        function calculateMetric(bandwidth, delay, reportedDistance) {
+            // EIGRP Metric Components (R1's link components)
+            const bwComponent = (10000000 / bandwidth); // 10^7/BW
+            const delayComponent = (delay / 10);
+            
+            // Total Metric for R1 to get to the neighbor
+            const metricToNeighbor = 256 * (bwComponent + delayComponent);
+            
+            // Total Feasible Distance (FD) = Metric to Neighbor + Neighbor's Reported Distance (RD)
+            const totalFD = metricToNeighbor + reportedDistance;
+
+            return { totalFD, metricToNeighbor };
+        }
+
+        /** Step 1: Calculate Feasible Distance (FD) for all paths */
+        function step1_calculateFD() {
+            log('----------------------------------------------------', 'log-step');
+            log(`R1 Status: ${currentState}. Calculating best route to ${DEST_NETWORK}...`, 'log-step');
+            log('----------------------------------------------------', 'log-step');
+            
+            let bestFD = Infinity;
+            
+            for (const neighbor in PATHS) {
+                const path = PATHS[neighbor];
+                const { totalFD, metricToNeighbor } = calculateMetric(path.bandwidth, path.delay, path.rd);
+
+                // Update the path's calculated FD
+                path.FD = Math.round(totalFD);
+                
+                log(`Path via <span class="log-router">${neighbor}</span>:`, 'log-dual');
+                log(`  - Reported Distance (RD): ${path.rd}`, 'log-dual');
+                log(`  - Cost to Neighbor: ${Math.round(metricToNeighbor)}`, 'log-dual');
+                log(`  - Total Feasible Distance (FD): ${path.FD}`, 'log-dual');
+
+                // Find the absolute lowest FD
+                if (path.FD < bestFD) {
+                    bestFD = path.FD;
+                }
+            }
+            R1_FD = bestFD;
+            log(`\n** R1's overall best metric (FD) is: ${R1_FD} **`, 'log-step');
+        }
+
+        /** Step 2: Select Successor and Feasible Successor (FC Check) */
+        function step2_selectSuccessors() {
+            log('----------------------------------------------------', 'log-step');
+            log('Checking Feasibility Condition (FC) and Selecting Successors...', 'log-step');
+            log('----------------------------------------------------', 'log-step');
+
+            let successor = null;
+            let feasibleSuccessors = [];
+
+            for (const neighbor in PATHS) {
+                const path = PATHS[neighbor];
+                path.isSuccessor = false;
+                path.isFeasible = false;
+                
+                // 1. Successor Check (Lowest FD wins)
+                if (path.FD === R1_FD) {
+                    path.isSuccessor = true;
+                    successor = neighbor;
+                }
+                
+                // 2. Feasibility Condition (FC) Check
+                // FC: Neighbor's Reported Distance (RD) < Current Router's FD (R1_FD)
+                if (path.rd < R1_FD) {
+                    path.isFeasible = true;
+                    feasibleSuccessors.push(neighbor);
+                    log(`Path via <span class="log-router">${neighbor}</span>: RD (${path.rd}) < R1's FD (${R1_FD}) - <span class="log-success">FEASIBILITY CONDITION MET!</span>`, 'log-success');
+                } else {
+                    log(`Path via <span class="log-router">${neighbor}</span>: RD (${path.rd}) >= R1's FD (${R1_FD}) - FC FAILED (Potential Loop).`, 'log-fail');
+                }
+            }
+            
+            // Output results
+            log(`\nSuccessor (Primary Route): <span class="log-router">${successor}</span> (FD: ${PATHS[successor].FD})`, 'log-step');
+            
+            if (feasibleSuccessors.length > 0) {
+                log(`Feasible Successors (Backup Routes): ${feasibleSuccessors.join(', ')}`, 'log-success');
+                PATHS[feasibleSuccessors[0]].isFeasible = true; // Mark the best one as FS
+            } else {
+                log('NO Feasible Successors found. If the primary link fails, R1 must go Active (slow convergence).', 'log-fail');
+            }
+            
+            currentState = 'Passive';
+            breakBtn.disabled = false;
+            breakBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+        }
+
+        /** Simulates the failure of the primary link (R1-R2) */
+        function simulateFailure() {
+            if (currentState === 'Active') {
+                log('R1 is already Active (re-converging). Please wait.', 'log-fail');
+                return;
+            }
+
+            log('\n\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!', 'log-fail');
+            log(`!!! SIMULATION EVENT: Successor Link R1 <-> R2 Fails !!!`, 'log-fail');
+            log('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!', 'log-fail');
+            
+            // 1. Mark link as broken visually and logically
+            LINK_R1_R2.classList.add('broken');
+            PATHS['R2'].FD = Infinity;
+            PATHS['R2'].isSuccessor = false;
+            
+            // 2. R1 checks its topology table for a Feasible Successor (FS)
+            const fsNeighbor = Object.keys(PATHS).find(n => PATHS[n].isFeasible && PATHS[n].FD !== Infinity);
+
+            if (fsNeighbor) {
+                // 3. Fast Convergence: FS exists, immediately promote it to Successor
+                log('\n*** FAST CONVERGENCE OCCURS! ***', 'log-success');
+                log('Feasible Successor Found. R1 bypasses Active state.', 'log-success');
+                
+                const oldFD = R1_FD;
+                R1_FD = PATHS[fsNeighbor].FD;
+                PATHS[fsNeighbor].isSuccessor = true;
+                
+                log(`New Successor: <span class="log-router">${fsNeighbor}</span> (New FD: ${R1_FD})`, 'log-success');
+                log(`R1 converges in milliseconds, maintaining a loop-free path.`, 'log-info');
+
+            } else {
+                // 4. Slow Convergence: No FS, must go Active and query neighbors
+                log('\n*** SLOW CONVERGENCE - DUAL goes ACTIVE ***', 'log-fail');
+                currentState = 'Active';
+                log('R1 sends Query packets to all neighbors to find an alternative path.', 'log-fail');
+                log('R1 waits for Reply packets before setting a new Successor.', 'log-fail');
+                log(`(This process is much slower and delays traffic.)`, 'log-info');
+            }
+            
+            // Disable button after failure
+            breakBtn.disabled = true;
+            breakBtn.textContent = 'Failure Simulated';
+            breakBtn.classList.remove('bg-red-500', 'hover:bg-red-600');
+            breakBtn.classList.add('bg-gray-400');
+        }
+
+        /** Main sequence handler */
+        function startConvergence() {
+            consoleOutput.innerHTML = '';
+            startBtn.disabled = true;
+            startBtn.textContent = 'Convergence Running...';
+            startBtn.classList.remove('bg-indigo-600', 'hover:bg-indigo-700');
+            startBtn.classList.add('bg-gray-400');
+
+            // 1. Calculate FD for all neighbors
+            step1_calculateFD();
+
+            // 2. Select Successor and Feasible Successor
+            step2_selectSuccessors();
+
+            startBtn.textContent = 'Convergence Complete';
+        }
+
+        // Initialize on load (Diagram is static in this simplified model)
+        document.addEventListener('DOMContentLoaded', () => {
+            log('Welcome to the EIGRP DUAL Simulator. Ready to start.', 'log-info');
+        });
+
+    </script>
+</body>
+</html>
