@@ -1,0 +1,15 @@
+[build]
+  # Publish the site from the repository root where index.html lives
+  publish = "."
+
+  # Directory where Netlify Functions are stored
+  functions = "netlify/functions"
+
+[dev]
+  # When running `netlify dev` this tells Netlify where functions live locally
+  functions = "netlify/functions"
+
+# Optional: you can add environment variables here for local testing,
+# but do NOT commit secrets to the repo. Use Netlify UI to add secrets.
+#[[plugins]]
+  # Example plugin configuration (commented out)
