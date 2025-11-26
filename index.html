@@ -170,7 +170,7 @@
       const payload = { input: inputText };
 
       // Try the user-provided path, then a dot-prefixed Netlify dev path as a fallback
-      const candidates = ['/netlify/functions/ai-handler', '/.netlify/functions/ai-handler'];
+      const candidates = ['/netlify/functions/ai-handler.js'];
       let lastErr = null;
 
       for(const p of candidates){
